@@ -20,7 +20,7 @@ Vagrant.configure("2") do |config|
   config.vm.box = "centos/7"
   config.vm.network "forwarded_port", guest: 80, host: 80
   config.vm.provider "virtualbox" do |v|
-    v.memory = 4096
+    v.memory = 2048
     v.cpus = 2
   end
 end
@@ -64,7 +64,7 @@ vagrant ssh
 
 [ссылка на локальный гитлаб](http://gitlab.mephi)
 
-9. Создайте группу devops-mephi и в ней проект banners
+9. Создайте группу devops-mephi и в ней проект git-test
 
 10. Откройте в другом браузере/режиме инкогнито и зарегистрируйтесь под пользователем, под которым планируете дальнейшую работу (под root работать нехорошо =)
 
@@ -73,7 +73,7 @@ vagrant ssh
 12. Склонируйте на локальную машину репозиторий через http
 
 ```
-git clone http://gitlab.mephi/devops-mephi/banners.git
+git clone http://gitlab.mephi/devops-mephi/git-test.git
 ```
 Если по каким-то причинам вы не можете/не хотите устанавливать git на локальную машину, можете делать это в виртуалке
 
