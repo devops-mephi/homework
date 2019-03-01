@@ -19,6 +19,7 @@
 Vagrant.configure("2") do |config|
   config.vm.box = "centos/7"
   config.vm.network "forwarded_port", guest: 80, host: 80
+  config.vm.network "forwarded_port", guest: 80, host: 8080
   config.vm.provider "virtualbox" do |v|
     v.memory = 2048
     v.cpus = 2
@@ -63,6 +64,9 @@ vagrant ssh
 8. Откройте гитлаб и настройте пароль root
 
 [ссылка на локальный гитлаб](http://gitlab.mephi)
+
+Если получается ошибка "не удается соедединться с сервером", то попробуйте работать по порту 8080: [ссылка на локальный гитлаб](http://gitlab.mephi:8080)
+Если гитлаб говорит 502 ошибкой, нужно дать ему время запуститься
 
 9. Создайте группу devops-mephi и в ней проект git-test
 
