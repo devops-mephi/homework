@@ -379,3 +379,37 @@ deamon
 [vagrant@localhost ~]$ sudo docker kill deamon
 deamon
 ```
+
+9. Можно пробросить файл(ы) с хостовой машины внутрь контейнера. Делается это с помощью опции -v (volumes).
+
+Создадим файл 
+```
+[vagrant@localhost ~]$ echo 'i will be inside container' > fl.txt
+[vagrant@localhost ~]$
+```
+
+Запустим контейнер, пробросив этот файл
+```
+[vagrant@localhost ~]$ sudo docker run -ti -v /home/vagrant/fl.txt:/home/root/fl.txt centos bash
+[root@f268c19a893e /]#
+```
+
+Файл действительно внутри
+```
+[root@f268c19a893e root]# cat fl.txt 
+i will be inside container
+[root@f268c19a893e root]#
+```
+
+При изменении файла на хостовой машине, изменения будут видны внутри контейнера.
+Откроем еще одну консоль на хосте и изменим файл
+```
+[vagrant@localhost ~]$ echo 'it changed!' > fl.txt 
+[vagrant@localhost ~]$
+```
+
+Изменения действительно видны:
+```
+[root@f268c19a893e root]# cat fl.txt 
+it changed!
+```
