@@ -677,3 +677,262 @@ ff47975cc0f2        16 minutes ago      /bin/sh -c #(nop)  MAINTAINER Alexey Kur
 <missing>           2 months ago        /bin/sh -c #(nop)  LABEL org.label-schema.sc…   0B                  
 <missing>           2 months ago        /bin/sh -c #(nop) ADD file:6f877549795f4798a…   202MB             
 ```
+
+## Сборка собственных image (Dockerfile). Простой веб-сервер.
+
+Давайте создадим что-нибудь более интересное — веб-сервер, раздающий статическую страницу. В качестве веб-сервера возьмем nginx.
+
+1. Создадим новую папку и в ней веб-страницу.
+```
+[vagrant@localhost ~]$ mkdir http_server
+[vagrant@localhost ~]$ cd http_server/
+[vagrant@localhost http_server]$ echo '<HTML><H1>My first http server in docker</H1></HTML>' > index.html
+[vagrant@localhost http_server]$
+```
+
+2. Пишем Dockerfile
+```
+# version 0.0.1
+
+FROM centos:7
+
+MAINTAINER Alexey Kurt <a.kurt@corp.mail.ru>
+
+RUN yum install -y ngin
+
+ADD index.html /usr/share/nginx/html/index.html
+
+EXPOSE 80
+
+CMD ["/usr/sbin/nginx", "-g daemon off;"]
+```
+Здесь новые команды:
+ADD: копирует файл из контекста сборки в файловую систему образа. В данном случае мы кладем нашу статическую страницу в то место, откуда nginx раздает статичные файлы.
+EXPOSE: указывает докеру, что контейнеру на базе данного образа может быть открыт порт 80.
+CMD: процесс, который будет запущен в контейнере по умолчанию. В данном случае мы использовали синтаксис []. Это значит, что команда будет запущена сама по себе, а не через bash, как если указать её строчкой (как в RUN). "-g daemon off;" - специальная опция у nginx, которая говорит ему не демонизироваться. Ведь если он демонизируется, то процесс /usr/sbin/nginx сразу завершится, а с ним и весь контейнер
+PS: да, я специально ошибся в написании nginx.
+
+3. Собираем
+
+```
+[vagrant@localhost http_server]sudo docker build -t http_server .
+Sending build context to Docker daemon  3.072kB
+Step 1/6 : FROM centos:7
+ ---> 1e1148e4cc2c
+Step 2/6 : MAINTAINER Alexey Kurt <a.kurt@corp.mail.ru>
+ ---> Using cache
+ ---> ff47975cc0f2
+Step 3/6 : RUN yum install -y ngin
+ ---> Running in aa35ae1a828b
+Loaded plugins: fastestmirror, ovl
+Determining fastest mirrors
+ * base: mirror.reconn.ru
+ * extras: mirror.reconn.ru
+ * updates: mirror.yandex.ru
+No package ngin available.
+Error: Nothing to do
+The command '/bin/sh -c yum install -y ngin' returned a non-zero code: 1
+```
+
+Во-первых заметьте, что на шаге 1 и 2, докер ничего не делал. Точно такой же слой уже был собран в прошлый раз, поэтому он был просто переиспользован. Чтобы отключить данный кеш при сборке нужно добавить опцию --no-cache
+
+На третьем шаге всё пошло не так, поэтому сборка была приостановлена. Благодаря промежуточным контейнерам довольно просто дебажить подобные случаи.
+Вот он, контейнер:
+```
+[vagrant@localhost http_server]$ sudo docker ps -a
+CONTAINER ID        IMAGE                    COMMAND                  CREATED             STATUS                         PORTS               NAMES
+aa35ae1a828b        ff47975cc0f2             "/bin/sh -c 'yum ins…"   2 minutes ago       Exited (1) 2 minutes ago                           cranky_williams
+```
+
+4. Запустим новый на базе образа ff47975cc0f2 и попробуем исправить команду
+
+```
+[vagrant@localhost http_server]$ sudo docker run --rm -ti ff47975cc0f2
+[root@d7e46cdaeffd /]# yum install nginx
+Loaded plugins: fastestmirror, ovl
+Determining fastest mirrors
+ * base: mirror.logol.ru
+ * extras: mirror.reconn.ru
+ * updates: dedic.sh
+base                                                       | 3.6 kB  00:00:00     
+extras                                                     | 3.4 kB  00:00:00     
+updates                                                    | 3.4 kB  00:00:00     
+(1/4): extras/7/x86_64/primary_db                          | 180 kB  00:00:00     
+(2/4): base/7/x86_64/group_gz                              | 166 kB  00:00:00     
+(3/4): updates/7/x86_64/primary_db                         | 2.4 MB  00:00:01     
+(4/4): base/7/x86_64/primary_db                            | 6.0 MB  00:00:01     
+No package nginx available.
+Error: Nothing to do
+```
+
+Хм, он и не nginx, какой же пакет нам нужен?
+Беглый гуглеж подсказывает нам, что нужно перед этим подключить дополнительный репозиторий. Что ж, попробуем
+```
+[root@d7e46cdaeffd /]# yum install -y epel-release
+Loaded plugins: fastestmirror, ovl
+Loading mirror speeds from cached hostfile
+ * base: mirror.logol.ru
+ * extras: mirror.reconn.ru
+ * updates: dedic.sh
+Resolving Dependencies
+--> Running transaction check
+---> Package epel-release.noarch 0:7-11 will be installed
+--> Finished Dependency Resolution
+
+Dependencies Resolved
+
+==================================================================================
+ Package                Arch             Version           Repository        Size
+==================================================================================
+Installing:
+ epel-release           noarch           7-11              extras            15 k
+
+Transaction Summary
+==================================================================================
+Install  1 Package
+
+Total download size: 15 k
+Installed size: 24 k
+Downloading packages:
+warning: /var/cache/yum/x86_64/7/extras/packages/epel-release-7-11.noarch.rpm: Header V3 RSA/SHA256 Signature, key ID f4a80eb5: NOKEY
+Public key for epel-release-7-11.noarch.rpm is not installed
+epel-release-7-11.noarch.rpm                               |  15 kB  00:00:00     
+Retrieving key from file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+Importing GPG key 0xF4A80EB5:
+ Userid     : "CentOS-7 Key (CentOS 7 Official Signing Key) <security@centos.org>"
+ Fingerprint: 6341 ab27 53d7 8a78 a7c2 7bb1 24c6 a8a7 f4a8 0eb5
+ Package    : centos-release-7-6.1810.2.el7.centos.x86_64 (@CentOS)
+ From       : /etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  Installing : epel-release-7-11.noarch                                       1/1 
+  Verifying  : epel-release-7-11.noarch                                       1/1 
+
+Installed:
+  epel-release.noarch 0:7-11                                                      
+
+Complete!
+
+[root@d7e46cdaeffd /]# yum install -y nginx
+Loaded plugins: fastestmirror, ovl
+Loading mirror speeds from cached hostfile
+
+....
+
+55 всяких зависимостей наставилось
+...
+  perl-libs.x86_64 4:5.16.3-294.el7_6                                             
+  perl-macros.x86_64 4:5.16.3-294.el7_6                                           
+  perl-parent.noarch 1:0.225-244.el7                                              
+  perl-podlators.noarch 0:2.5.1-3.el7                                             
+  perl-threads.x86_64 0:1.87-4.el7                                                
+  perl-threads-shared.x86_64 0:1.43-6.el7                                         
+
+Complete!
+[root@d7e46cdaeffd /]# exit
+exit
+[vagrant@localhost http_server]$
+```
+Ура! Нужные команды найдены. Заметьте, что мы выполняли эксперименты в контейнере, который потом удалим и никакого мусора не останется.
+
+5. Правим Dockerfile
+```
+# version 0.0.2
+
+FROM centos:7
+
+MAINTAINER Alexey Kurt <a.kurt@corp.mail.ru>
+
+RUN yum install -y epel-release
+
+RUN yum install -y nginx
+
+ADD index.html /usr/share/nginx/html/index.html
+
+EXPOSE 80
+
+CMD ["/usr/sbin/nginx", "-g daemon off;"]
+```
+
+6. собираем
+```
+[vagrant@localhost http_server]$ sudo docker build -t http_server .
+Sending build context to Docker daemon  3.072kB
+Step 1/7 : FROM centos:7
+ ---> 1e1148e4cc2c
+Step 2/7 : MAINTAINER Alexey Kurt <a.kurt@corp.mail.ru>
+ ---> Using cache
+ ---> ff47975cc0f2
+Step 3/7 : RUN yum install -y epel-release
+ ---> Running in 564f528007b6
+Loaded plugins: fastestmirror, ovl
+Determining fastest mirrors
+ * base: mirror.yandex.ru
+ * extras: mirror.logol.ru
+ * updates: mirror.logol.ru
+Resolving Dependencies
+--> Running transaction check
+---> Package epel-release.noarch 0:7-11 will be installed
+--> Finished Dependency Resolution
+
+Dependencies Resolved
+
+.... вывод опущен
+
+Installed:
+  epel-release.noarch 0:7-11                                                    
+
+Complete!
+Removing intermediate container 564f528007b6
+ ---> d12859ca612a
+Step 4/7 : RUN yum install -y nginx
+ ---> Running in 6f06e85e424a
+Loaded plugins: fastestmirror, ovl
+Loading mirror speeds from cached hostfile
+ * base: mirror.yandex.ru
+ * epel: mirror.yandex.ru
+ * extras: mirror.logol.ru
+ * updates: mirror.logol.ru
+Resolving Dependencies
+
+.... вывод опущен
+  perl-threads.x86_64 0:1.87-4.el7                                              
+  perl-threads-shared.x86_64 0:1.43-6.el7                                       
+
+Complete!
+Removing intermediate container 6f06e85e424a
+ ---> a306a610d98d
+Step 5/7 : ADD index.html /usr/share/nginx/html/index.html
+ ---> 3a7a39559db6
+Step 6/7 : EXPOSE 80
+ ---> Running in 903aa9340ab2
+Removing intermediate container 903aa9340ab2
+ ---> cef12055d10a
+Step 7/7 : CMD ["/usr/sbin/nginx", "-g daemon off;"]
+ ---> Running in d9ee1140ec67
+Removing intermediate container d9ee1140ec67
+ ---> ffa343436f3e
+Successfully built ffa343436f3e
+Successfully tagged http_server:latest
+```
+
+Ура!
+
+7. Запустим:
+
+```
+[vagrant@localhost http_server]$ sudo docker run -d -p 8000:80 -ti http_server
+b968471ce0f30932c2f456fe0ca6742ccfabee736e91fe8cfd8911bc5fc66a51
+[vagrant@localhost http_server]$
+```
+
+Опция -p задает проброс портов. В данном случае порту хостовой машины 8000 будет соответствовать порт в контейнере 80.
+
+8. Проверяем:
+```
+[vagrant@localhost http_server]$ curl 127.0.0.1:8000
+<HTML><H1>My first http server in docker</H1></HTML>
+[vagrant@localhost http_server]$
+```
