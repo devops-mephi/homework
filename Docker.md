@@ -330,3 +330,52 @@ I am deamon
 Видим запущенный "демон"-процесс с pid=1 и наш bash, в котором мы находимся прямо сейчас.
 
 С помощью этой команды (docker exec) можно производить какие-то обслуживающие действия, запускать скрипты внутри работающих контейнеров.
+
+Заметьте, что завершение этого bash не приведет к остановке контейнера
+```
+[root@f1609b2a7528 /]# exit
+exit
+[vagrant@localhost ~]$ sudo docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+f1609b2a7528        centos              "bash -c 'while true…"   14 minutes ago      Up 14 minutes                           deamon
+```
+
+Остановить работающий контейнер можно так
+```
+[vagrant@localhost ~]$ sudo docker stop deamon
+deamon
+```
+Проверим, что он остановился
+```
+[vagrant@localhost ~]$ sudo docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+[vagrant@localhost ~]$ sudo docker ps -a
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS                         PORTS               NAMES
+f1609b2a7528        centos              "bash -c 'while true…"   15 minutes ago      Exited (137) 13 seconds ago                        deamon
+```
+
+Снова запустить вот так:
+```
+[vagrant@localhost ~]$ sudo docker start deamon
+deamon
+```
+
+Убедимся, что он работает и исправно пишет логи
+```
+[vagrant@localhost ~]$ sudo docker logs deamon -tf
+...
+2019-03-03T14:10:31.390380022Z I am deamon
+2019-03-03T14:10:32.392474637Z I am deamon
+2019-03-03T14:10:33.395287694Z I am deamon
+2019-03-03T14:10:34.442961371Z I am deamon
+2019-03-03T14:10:35.657940767Z I am deamon
+2019-03-03T14:10:36.667822682Z I am deamon
+```
+
+8. Команда docker stop посылает процессу в контейнере с pid=1 сигнал SIGTERM, ждем 10 секунд (это можно переопределить опцией -t) и затем, если процесс не завершился, убивает его уже сигналом SIGKILL. 
+
+Сразу послать SIGKILL можно так
+```
+[vagrant@localhost ~]$ sudo docker kill deamon
+deamon
+```
