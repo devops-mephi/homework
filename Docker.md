@@ -190,6 +190,7 @@ CONTAINER ID        IMAGE               COMMAND             CREATED             
 bash: nano: command not found
 ```
 Мы видим, что новый контейнер получил новое имя (41f06a2d0dc2) и что изменения, сделанные нами в пункте 3 (установка nano) никак не отразились на новом контейнере.
+Итак, команда docker run создает новый контейнер и запускает его. Если указан образ, которого нет локально, делается попытка добыть его из реджистри с помощью docker pull.
 
 Выйдем из него
 ```
@@ -434,3 +435,93 @@ f312847f158e
 CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
 [vagrant@localhost ~]$ 
 ```
+
+## Сборка собственных image (docker commit)
+
+Существует два способа создать собственные docker image: docker commit и Dockerfile.
+Способ через docker commit не является рекомендованным, однако мы его рассмотрим для улучшения понимания того, что происходит.
+
+Суть способа довольно проста: нужно поднять контейнер, сделать в нем что-то и потом сохранить получившийся контейнер в виде образа.
+
+Будем решать следующую задачу: допустим, мы не любим текстовый редактор vi и хотим, чтобы во всех контейнерах был редактор nano (он не входит в базовый образ centos).
+
+1. Поднимаем контейнер с centos:7
+```
+[vagrant@localhost ~]$ sudo docker run -ti centos bash
+[root@e0862eed7c42 /]#
+```
+
+2. Устанавливаем nano
+```
+[root@e0862eed7c42 /]# yum install -y nano
+Loaded plugins: fastestmirror, ovl
+Determining fastest mirrors
+ * base: mirror.sale-dedic.com
+ * extras: mirror.logol.ru
+ * updates: dedic.sh
+....
+
+Installed:
+  nano.x86_64 0:2.3.1-10.el7                                                      
+
+Complete!
+```
+
+3. Выходим из bash, останавливая контейнер
+
+```
+[root@e0862eed7c42 /]# exit
+exit
+[vagrant@localhost ~]$
+```
+
+4. Находим ID контейнера
+
+```
+[vagrant@localhost ~]$ sudo docker ps -a
+CONTAINER ID        IMAGE               COMMAND             CREATED              STATUS                      PORTS               NAMES
+e0862eed7c42        centos              "bash"              About a minute ago   Exited (0) 29 seconds ago                       romantic_noether
+```
+
+5. Делаем docker commit
+
+```
+[vagrant@localhost ~]$ sudo docker commit e0862eed7c42 centos7_with_nano:ver1    
+sha256:8fb998ac2c98c216cdd8481f14c8e03efd8c64c9e76360155721f22528d3d3da
+```
+
+6. Видим образ в списке существующих:
+
+```
+[vagrant@localhost ~]$ sudo docker images   
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+centos7_with_nano   ver1                8fb998ac2c98        49 seconds ago      280MB
+hello-world         latest              fce289e99eb9        2 months ago        1.84kB
+centos              7                   1e1148e4cc2c        2 months ago        202MB
+centos              latest              1e1148e4cc2c        2 months ago        202MB
+```
+
+7. Можно посмотреть историю того, как был создан образ
+
+```
+[vagrant@localhost ~]$ sudo docker history centos7_with_nano:ver1
+IMAGE               CREATED             CREATED BY                                      SIZE                COMMENT
+8fb998ac2c98        2 minutes ago       bash                                            78MB                
+1e1148e4cc2c        2 months ago        /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B                  
+<missing>           2 months ago        /bin/sh -c #(nop)  LABEL org.label-schema.sc…   0B                  
+<missing>           2 months ago        /bin/sh -c #(nop) ADD file:6f877549795f4798a…   202MB
+```
+
+8. Поднимем контейнер на базе нового образа и убедимся, что в нем есть nano.
+
+```
+[vagrant@localhost ~]$ sudo docker run -ti --rm centos7_with_nano:ver1 bash
+[root@d181bff2e851 /]# nano
+[root@d181bff2e851 /]# exit
+exit
+[vagrant@localhost ~]$
+```
+Заметьте, что в этот раз мы использовали опцию --rm при создании контейнера, она означает, что по завершению контейнер будет удален (будто выполнили docker rm).
+
+## Сборка собственных image (Dockerfile)
+
