@@ -413,3 +413,24 @@ i will be inside container
 [root@f268c19a893e root]# cat fl.txt 
 it changed!
 ```
+
+Выйдем из контейнера
+```
+[root@f268c19a893e root]# exit
+exit
+[vagrant@localhost ~]$
+```
+
+10. Специальной командой docker для удаления всех контейнеров не существует, но можно использовать вот такой "хак":
+```
+[vagrant@localhost ~]$ sudo docker rm $(sudo docker ps -a -q)
+f268c19a893e
+ce596ea9ba06
+f1609b2a7528
+41f06a2d0dc2
+f312847f158e
+
+[vagrant@localhost ~]$ sudo docker ps -a
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+[vagrant@localhost ~]$ 
+```
