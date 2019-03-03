@@ -118,4 +118,194 @@ centos              latest              1e1148e4cc2c        2 months ago        
 Как мы видим, образы с тегом 7 и latest имеют одинаковые IMAGE ID — это один и тот же образ.
 При построении сред из докер-контейнеров всегда указывайте версии используемых вами образов (да и вообще, всегда указывайте четкие версии всего, не только образов докера). Потому что в один момент может выйти новая, и что-то будет с ней несовместимо и всё сломается.
 
-3. 
+3. Теперь запустим контейнер с процессом bash
+```
+[vagrant@localhost ~]$ sudo docker run -ti centos bash
+[root@56153529900b /]# 
+```
+Ух! Оцените скорость, с которой это произошло. Сейчас мы находимся в bash'е внутри centos 7. Вы можете работать как с полноценной "машиной".
+
+Имя машины является именем контейнера:
+```
+[root@56153529900b /]# hostname
+56153529900b
+```
+
+Процесс bash действительно имеет pid=1
+```
+[root@56153529900b /]# ps -aux
+USER       PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND
+root         1  0.0  0.1  11820  1892 pts/0    Ss   13:40   0:00 bash
+root        16  0.0  0.0  51740  1724 pts/0    R+   13:44   0:00 ps -aux
+```
+
+Позапускаем какие-то команды
+```
+[root@56153529900b /]# ls /
+anaconda-post.log  bin  dev  etc  home  lib  lib64  media  mnt  opt  proc  root  run  sbin  srv  sys  tmp  usr  var
+[root@56153529900b /]# date
+Sun Mar  3 13:21:54 UTC 2019
+[root@56153529900b /]# nano
+bash: nano: command not found
+```
+
+Ой, редактора nano тут нет, давайте установим
+```
+[root@56153529900b /]# yum install -y nano
+Loaded plugins: fastestmirror, ovl
+Determining fastest mirrors
+
+.....
+
+
+Installed:
+  nano.x86_64 0:2.3.1-10.el7                                                                                                            
+
+Complete!
+```
+
+Теперь есть, можно запустить
+```
+[root@56153529900b /]# nano
+```
+
+Теперь выйдем из bash
+```
+[root@56153529900b /]# exit
+exit
+[vagrant@localhost ~]$ 
+```
+
+Посмотрим на список запущенных контейнеров
+```
+[vagrant@localhost ~]$ sudo docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+```
+Никаких контейнеров не запущено, тот что мы запускали, завершился вместе с bash.
+
+4. Запустим еще один контейнер, такой же
+```
+[vagrant@localhost ~]$ sudo docker run -ti centos bash
+[root@41f06a2d0dc2 /]# nano
+bash: nano: command not found
+```
+Мы видим, что новый контейнер получил новое имя (41f06a2d0dc2) и что изменения, сделанные нами в пункте 3 (установка nano) никак не отразились на новом контейнере.
+
+Выйдем из него
+```
+[root@41f06a2d0dc2 /]# exit
+exit
+[vagrant@localhost ~]$
+```
+
+5. Увидеть все контейнеры, включая остановленные, можно так
+```
+[vagrant@localhost ~]$ sudo docker ps -a
+CONTAINER ID        IMAGE               COMMAND             CREATED              STATUS                        PORTS               NAMES
+41f06a2d0dc2        centos              "bash"              About a minute ago   Exited (127) 14 seconds ago                       angry_blackburn
+56153529900b        centos              "bash"              16 minutes ago       Exited (0) 8 minutes ago                          gifted_booth
+f312847f158e        hello-world         "/hello"            39 minutes ago       Exited (0) 39 minutes ago                         inspiring_tu
+```
+
+Мы видим три остановленных контейнера (Exited). Первый мы запустили при установке, второй в пунте 3, третий в пунте 4.
+Кроме CONTAINER ID докер каждому контейнеру присвоил человекочитаемые имена: inspiring_tu, gifted_booth, angry_blackburn. Это имя автогенерируемое и его можно использовать также, как и CONTAINER ID. 
+Можно задавать свое имя при старте контейнера опцией --name
+
+Попробуем запустить контейнер, в который мы устанавливали nano снова.
+```
+[vagrant@localhost ~]$ sudo docker start gifted_booth
+gifted_booth
+[vagrant@localhost ~]$ 
+```
+На этот раз мы не попали в bash в терминале. В пунктах 3 и 4 мы использовали опции -ti, которые создают в контейнере TTY-интерфейс и подключают текущую консоль к нему.
+Но мы видим, что контейнер живет и работает
+```
+[vagrant@localhost ~]$ sudo docker ps
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+56153529900b        centos              "bash"              23 minutes ago      Up About a minute                       gifted_booth
+```
+
+"Подсоединиться" к нему можно так:
+```
+[vagrant@localhost ~]$ sudo docker attach 56153529900b
+[root@56153529900b /]#
+```
+
+Попробуем запустить nano
+```
+[root@56153529900b /]# nano
+[root@56153529900b /]# 
+```
+Успех! Это тот самый контейнер.
+
+Снова выйдем и завершим его
+```
+[root@56153529900b /]# exit
+exit
+[vagrant@localhost ~]$ 
+```
+
+Совсем удалить контейнер можно так:
+```
+[vagrant@localhost ~]$ sudo docker rm gifted_booth
+gifted_booth
+```
+
+6. Теперь запустим контейнер, который будет работать как демон. Нам поможет опция -d.
+```
+[vagrant@localhost ~]$ sudo docker run -d --name deamon centos bash -c "while true; do echo 'I am deamon'; sleep 1; done"
+f1609b2a7528a9af4ebe0bc8f5e21428a91b82d3fcdf635a79386b9690070d4f
+```
+
+Мы запустили команду, которая каждую секунду будет выводить "I am deamon". Но куда она это выводит?
+
+Найдем наш контейнер:
+```
+[vagrant@localhost ~]$ sudo docker ps
+CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS               NAMES
+f1609b2a7528        centos              "bash -c 'while true…"   17 seconds ago      Up 15 seconds                           deamon
+```
+На этот раз докер использовал имя, которые мы задали при запуске (docker).
+
+Теперь сделаем так:
+```
+[vagrant@localhost ~]$ sudo docker logs deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+I am deamon
+```
+
+О, мы выяснили следующее: каждый раз когда процесс выводит что-то в STDOUT или STDERR, докер считает написанное логом и успешно сохраняет вне контейнера.
+
+Можно смотреть лог в реальном времени, как "tail -f" вот так
+```
+[vagrant@localhost ~]$ sudo docker logs deamon -f
+I am deamon
+I am deamon
+I am deamon
+^C
+```
+
+А если добавить еще опцию -t, то к каждому сообщению будет подписан timestamp
+```
+[vagrant@localhost ~]$ sudo docker logs deamon -ft
+2019-03-03T13:56:29.117258362Z I am deamon
+2019-03-03T13:56:30.124673915Z I am deamon
+2019-03-03T13:56:31.127844702Z I am deamon
+2019-03-03T13:56:32.129189340Z I am deamon
+2019-03-03T13:56:33.135152267Z I am deamon
+^C
+```
