@@ -511,6 +511,7 @@ IMAGE               CREATED             CREATED BY                              
 <missing>           2 months ago        /bin/sh -c #(nop)  LABEL org.label-schema.sc…   0B                  
 <missing>           2 months ago        /bin/sh -c #(nop) ADD file:6f877549795f4798a…   202MB
 ```
+Обратите внимание, как непонятно отображены изменения в истории, которые мы вносили данным способо (bash). Сборка такие образом непрозрачна и впоследствии непонятно, как именно был собран тот или иной образ.
 
 8. Поднимем контейнер на базе нового образа и убедимся, что в нем есть nano.
 
@@ -525,3 +526,154 @@ exit
 
 ## Сборка собственных image (Dockerfile)
 
+Теперь перейдем к рекомендованному способу. В данном случае нужно создать специальный файл Dockerfile, который будет описывать, как именно собирается образ.
+
+1. Создадим папку и в ней Dockerfile
+```
+[vagrant@localhost ~]$ mkdir centos_with_nano
+[vagrant@localhost ~]$ cd centos_with_nano/
+[vagrant@localhost centos_with_nano]$ vi Dockerfile
+```
+
+2. Заполним файл следующим образом
+```
+# Version: 0.0.1
+
+FROM centos:7
+
+MAINTAINER Alexey Kurt <a.kurt@corp.mail.ru>
+
+RUN yum install -y nano
+```
+
+3. Запустим сборку
+```
+[vagrant@localhost centos_with_nano]$ sudo docker build -t centos7_with_nano:ver2 .
+Sending build context to Docker daemon  2.048kB
+Step 1/3 : FROM centos:7
+7: Pulling from library/centos
+Digest: sha256:184e5f35598e333bfa7de10d8fb1cebb5ee4df5bc0f970bf2b1e7c7345136426
+Status: Downloaded newer image for centos:7
+ ---> 1e1148e4cc2c
+Step 2/3 : MAINTAINER Alexey Kurt <a.kurt@corp.mail.ru>
+ ---> Running in 9f79ac38d36d
+Removing intermediate container 9f79ac38d36d
+ ---> ff47975cc0f2
+Step 3/3 : RUN yum install -y nano
+ ---> Running in dc45d8a7028e
+Loaded plugins: fastestmirror, ovl
+Determining fastest mirrors
+ * base: mirror.reconn.ru
+ * extras: mirror.reconn.ru
+ * updates: centos-mirror.rbc.ru
+Resolving Dependencies
+--> Running transaction check
+---> Package nano.x86_64 0:2.3.1-10.el7 will be installed
+--> Finished Dependency Resolution
+
+Dependencies Resolved
+
+================================================================================
+ Package        Arch             Version                   Repository      Size
+================================================================================
+Installing:
+ nano           x86_64           2.3.1-10.el7              base           440 k
+
+Transaction Summary
+================================================================================
+Install  1 Package
+
+Total download size: 440 k
+Installed size: 1.6 M
+Downloading packages:
+Public key for nano-2.3.1-10.el7.x86_64.rpm is not installed
+warning: /var/cache/yum/x86_64/7/base/packages/nano-2.3.1-10.el7.x86_64.rpm: Header V3 RSA/SHA256 Signature, key ID f4a80eb5: NOKEY
+Retrieving key from file:///etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+Importing GPG key 0xF4A80EB5:
+ Userid     : "CentOS-7 Key (CentOS 7 Official Signing Key) <security@centos.org>"
+ Fingerprint: 6341 ab27 53d7 8a78 a7c2 7bb1 24c6 a8a7 f4a8 0eb5
+ Package    : centos-release-7-6.1810.2.el7.centos.x86_64 (@CentOS)
+ From       : /etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-7
+Running transaction check
+Running transaction test
+Transaction test succeeded
+Running transaction
+  Installing : nano-2.3.1-10.el7.x86_64                                     1/1 
+  Verifying  : nano-2.3.1-10.el7.x86_64                                     1/1 
+
+Installed:
+  nano.x86_64 0:2.3.1-10.el7                                                    
+
+Complete!
+Removing intermediate container dc45d8a7028e
+ ---> 6c050bc6f920
+Successfully built 6c050bc6f920
+Successfully tagged centos7_with_nano:ver2
+[vagrant@localhost centos_with_nano]$ 
+```
+
+Теперь пора объяснить, что именно происходит.
+На каждую строчку в файле Dockerfile докер делает нечто подобное тому, что мы делали в первом способе:
+Запускает контейнер из прыдыдущего image-слоя.
+Выполняет на нём инструкцию из Dockerfile.
+Если она выполнилась успешно, то docker commit этого контейнера, сохраняя в промежуточный image-слой. И удаление временного контейнера.
+Переходит к следующей инструкции.
+
+Пройдемся по тому, что сделала команда docker build:
+
+```
+Sending build context to Docker daemon  2.048kB
+```
+Все содержимое папки, которую мы указали в качестве рабочей директории (мы указали . то есть текущая директория) отправляются в докер-демон. У нас есть только Dockerfile, но если бы существовали другие файлы (например, конфиги), они были бы отправлены тоже.
+
+```
+Step 1/3 : FROM centos:7
+7: Pulling from library/centos
+Digest: sha256:184e5f35598e333bfa7de10d8fb1cebb5ee4df5bc0f970bf2b1e7c7345136426
+Status: Downloaded newer image for centos:7
+ ---> 1e1148e4cc2c
+```
+Любой Dockerfile должен обязательно начинаться с инструкции FROM, в которой указывается образ, на базе которого будет выполнен build. В данном случае мы выбрали centos:7. Создание промежуточного контейнера в данном случае не нужно, просто взят образ, уже существующий у нас (1e1148e4cc2c)
+
+```
+Step 2/3 : MAINTAINER Alexey Kurt <a.kurt@corp.mail.ru>
+ ---> Running in 9f79ac38d36d
+Removing intermediate container 9f79ac38d36d
+ ---> ff47975cc0f2
+```
+Чтобы выполнить инструкцию, создался контейнер с ID 9f79ac38d36d на базе образа centos:7 из прошлого пункта, выполнена инструкция, контейнер был закоммичен в image-слой с ID ff47975cc0f2 и удален
+
+```
+Step 3/3 : RUN yum install -y nano
+ ---> Running in dc45d8a7028e
+Loaded plugins: fastestmirror, ovl
+Determining fastest mirrors
+ * base: mirror.reconn.ru
+....
+
+Installed:
+  nano.x86_64 0:2.3.1-10.el7                                                    
+
+Complete!
+Removing intermediate container dc45d8a7028e
+ ---> 6c050bc6f920
+```
+Аналогично, создан контейнер dc45d8a7028e на базе образа ff47975cc0f2, выполнена команда yum install и затем из контейнера создался image-слой 6c050bc6f920.
+
+```
+Successfully built 6c050bc6f920
+Successfully tagged centos7_with_nano:ver2
+```
+Dockerfile закончился, поэтому сборка на этом завершена, image-слой 6c050bc6f920 получает имя "centos7_with_nano:ver2"
+
+4. История создания образа будет выглядеть в данном способе уже гораздо понятнее:
+
+```
+[vagrant@localhost centos_with_nano]sudo docker history centos7_with_nano:ver2
+IMAGE               CREATED             CREATED BY                                      SIZE                COMMENT
+6c050bc6f920        16 minutes ago      /bin/sh -c yum install -y nano                  78MB                
+ff47975cc0f2        16 minutes ago      /bin/sh -c #(nop)  MAINTAINER Alexey Kurt <a…   0B                  
+1e1148e4cc2c        2 months ago        /bin/sh -c #(nop)  CMD ["/bin/bash"]            0B                  
+<missing>           2 months ago        /bin/sh -c #(nop)  LABEL org.label-schema.sc…   0B                  
+<missing>           2 months ago        /bin/sh -c #(nop) ADD file:6f877549795f4798a…   202MB             
+```
