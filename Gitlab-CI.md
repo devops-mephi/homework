@@ -65,3 +65,17 @@ Runner registered successfully. Feel free to start it, but if it's running alrea
 ```
 sudo usermod -aG docker gitlab-runner
 ```
+
+5. Теперь добавим файл .gitlab-ci.yml в корень проекта
+```
+stages:
+  - build
+
+build:
+  stage: build
+  script:
+    - whoami
+    - docker-compose build
+  tags:
+    - vagrant
+```
