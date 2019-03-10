@@ -693,3 +693,29 @@ mysql> show tables;
 mysql> 
 
 ```
+
+7. Можем попробовать открыть страницу логина в админку django:
+
+http://127.0.0.1:8000/admin/login/?next=/admin/
+
+Ой, оно просит пароль, но какой пароль?
+Нужно установить пароль администратора в django. Смотрим документацию https://docs.djangoproject.com/en/2.1/intro/tutorial02/#creating-an-admin-user
+
+Ага, нужно выполнить manage.py createsuperuser
+
+Сделаем!
+```
+[vagrant@localhost banners]$ sudo docker-compose run web python manage.py createsuperuser
+Username (leave blank to use 'root'): admin
+Email address: admin@admin.ru
+Password: 
+Password (again): 
+Superuser created successfully.
+```
+
+8. Попробуем залогиниться:
+
+http://127.0.0.1:8000/admin/login/?next=/admin/
+
+вводим логин-пароль, успех!
+
