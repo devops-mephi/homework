@@ -494,6 +494,8 @@ Attaching to banners_web_1
 http://127.0.0.1:8000/
 ```
 
+![Django blank](images/django_blank.png)
+
 Консоль с docker-compose при этом выводит лог, что полезно при разработке:
 
 ```
@@ -698,6 +700,8 @@ mysql>
 
 http://127.0.0.1:8000/admin/login/?next=/admin/
 
+![Django login](images/django_login.png)
+
 Ой, оно просит пароль, но какой пароль?
 Нужно установить пароль администратора в django. Смотрим документацию https://docs.djangoproject.com/en/2.1/intro/tutorial02/#creating-an-admin-user
 
@@ -719,3 +723,4 @@ http://127.0.0.1:8000/admin/login/?next=/admin/
 
 вводим логин-пароль, успех!
 
+![Django admin](images/django_admin.png)
