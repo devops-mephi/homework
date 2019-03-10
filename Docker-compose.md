@@ -510,3 +510,186 @@ web_1  | [10/Mar/2019 13:12:37] "GET /static/admin/fonts/Roboto-Light-webfont.wo
 web_1  | Not Found: /favicon.ico
 web_1  | [10/Mar/2019 13:12:43] "GET /favicon.ico HTTP/1.1" 404 1973
 ```
+
+## Добавляем mysql
+
+1. Воспользуемся официальным docker-образом mysql. https://hub.docker.com/_/mysql
+
+Прочитав его, допишем в наш docker-compose.yml следующее:
+
+```
+version: '3'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/code
+
+  db:
+    image: mysql:5.7
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: yes
+      MYSQL_USER: developer
+      MYSQL_PASSWORD: 1234
+      MYSQL_DATABASE: mephi
+```
+
+Пароль не боимся светить, потому что это временный контейнер на нашей локальной машине.
+
+2. Попробуем запустить
+
+```
+[vagrant@localhost banners]$ sudo docker-compose up
+Creating network "banners_default" with the default driver
+Creating banners_web_1 ... done
+Creating banners_db_1  ... done
+Attaching to banners_db_1, banners_web_1
+db_1   | Initializing database
+
+дальше много много вывода — инициализации БД
+
+db_1   | 2019-03-10T14:41:50.488964Z 0 [Note] Event Scheduler: Loaded 0 events
+db_1   | 2019-03-10T14:41:50.489938Z 0 [Note] mysqld: ready for connections.
+db_1   | Version: '5.7.25'  socket: '/var/run/mysqld/mysqld.sock'  port: 3306  MySQL Community Server (GPL)
+```
+
+3. Откроем дополнительную консоль и поменяем в проекте настройки базы данных
+
+```
+[vagrant@localhost banners]$ vi banners/settings.py
+```
+
+Найдем блок DATABASES и приведем его к следующему виду:
+```
+# Database
+# https://docs.djangoproject.com/en/2.1/ref/settings/#databases
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'mephi',
+        'USER': 'developer',
+        'PASSWORD': '1234',
+        'HOST': 'db',
+        'PORT': '3306',
+    }
+}
+```
+
+4. В консоли с запущенным docker-compose видим следующее:
+
+```
+web_1  | Performing system checks...
+web_1  | 
+web_1  | System check identified no issues (0 silenced).
+web_1  | 
+web_1  | You have 15 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): admin, auth, contenttypes, sessions.
+web_1  | Run 'python manage.py migrate' to apply them.
+web_1  | March 10, 2019 - 14:41:38
+web_1  | Django version 2.1.7, using settings 'banners.settings'
+web_1  | Starting development server at http://0.0.0.0:8000/
+web_1  | Quit the server with CONTROL-C.
+```
+
+Что произошло? Когда в django-проекте меняется код, сервер, запущенный по runserver автоматически перезагружает код. Это полезно, потому что не нужно останавливать/запускать окружение.
+
+Но обратим внимание на следующие строчки:
+```
+web_1  | You have 15 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): admin, auth, contenttypes, sessions.
+web_1  | Run 'python manage.py migrate' to apply them.
+```
+
+Что это? В конфиге django подключены "приложения" для авторизации, админки и сессий. Для их работы в базе данных нужны определенные таблички, которые создадутся, если набрать manage.py migrate
+
+5. Давайте это и сделаем (в другой консоли)
+
+```
+[vagrant@localhost banners]$ sudo docker-compose run web python manage.py migrate
+Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, sessions
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying sessions.0001_initial... OK
+```
+
+Что произошло: 
+django-проект успешно подсоединился к БД, запущенной в соседнем контейнере, и создал в ней некие таблички, применив поверх них альтеры.
+
+6. В контейнере с mysql также есть клиент, которым можно подсединиться к БД (необязательно устанавливать его на локальную машину). 
+
+Давайте подсоединимся
+```
+[vagrant@localhost banners]$ sudo docker-compose run db mysql -udeveloper -p1234 -hdb
+mysql: [Warning] Using a password on the command line interface can be insecure.
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 5
+Server version: 5.7.25 MySQL Community Server (GPL)
+
+Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql>
+```
+
+Вот они созданные таблицы в бд mephi:
+
+```
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mephi              |
++--------------------+
+2 rows in set (0.09 sec)
+
+mysql> use mephi;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> show tables;
++----------------------------+
+| Tables_in_mephi            |
++----------------------------+
+| auth_group                 |
+| auth_group_permissions     |
+| auth_permission            |
+| auth_user                  |
+| auth_user_groups           |
+| auth_user_user_permissions |
+| django_admin_log           |
+| django_content_type        |
+| django_migrations          |
+| django_session             |
++----------------------------+
+10 rows in set (0.00 sec)
+
+mysql> 
+
+```
