@@ -488,5 +488,25 @@ Attaching to banners_web_1
 ....
 
 ```
+Поскольку порт 8000 проброшен из виртуалки, то можно попробовать открыть в браузере
 
+```
+http://127.0.0.1:8000/
+```
 
+Консоль с docker-compose при этом выводит лог, что полезно при разработке:
+
+```
+[vagrant@localhost banners]$ sudo docker-compose up
+Creating network "banners_default" with the default driver
+Creating banners_web_1 ... done
+Attaching to banners_web_1
+web_1  | [10/Mar/2019 13:12:25] "GET / HTTP/1.1" 200 16348
+web_1  | [10/Mar/2019 13:12:35] "GET / HTTP/1.1" 200 16348
+web_1  | [10/Mar/2019 13:12:36] "GET /static/admin/css/fonts.css HTTP/1.1" 200 423
+web_1  | [10/Mar/2019 13:12:37] "GET /static/admin/fonts/Roboto-Regular-webfont.woff HTTP/1.1" 200 80304
+web_1  | [10/Mar/2019 13:12:37] "GET /static/admin/fonts/Roboto-Bold-webfont.woff HTTP/1.1" 200 82564
+web_1  | [10/Mar/2019 13:12:37] "GET /static/admin/fonts/Roboto-Light-webfont.woff HTTP/1.1" 200 81348
+web_1  | Not Found: /favicon.ico
+web_1  | [10/Mar/2019 13:12:43] "GET /favicon.ico HTTP/1.1" 404 1973
+```
