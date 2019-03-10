@@ -58,3 +58,10 @@ Runner registered successfully. Feel free to start it, but if it's running alrea
 После окончания регистрации на странице настроек проекта должен быть виден настроенный runner.
 
 ![Runner activated](images/runner_activated.png)
+
+4. Добавление прав пользователю gitlab-runner.
+Мы будем хотеть запускать команды докера из раннера. Поэтому нужно добавить его в группу "docker"
+
+```
+sudo usermod -aG docker gitlab-runner
+```
