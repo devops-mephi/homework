@@ -529,7 +529,8 @@ services:
       - "8000:8000"
     volumes:
       - .:/code
-
+    depends_on:
+      - db
   db:
     image: mysql:5.7
     command: --default-authentication-plugin=mysql_native_password
@@ -724,3 +725,87 @@ http://127.0.0.1:8000/admin/login/?next=/admin/
 вводим логин-пароль, успех!
 
 ![Django admin](images/django_admin.png)
+
+9. Теперь нужно хорошо понимать, что все изменения с БД мы вносили в базу внутри контейнера, что значит, что, убив этот контейнер, мы потеряем все изменения. Да и вообще мы хотели сделать среду, которая по одной кнопке разворачивается и полностью работает. Значит нужно сделать так, чтобы изменения, сделанные нами выше, применялись при создании контейнера. Почитав документацию по docker-образу mysql видим, что есть специальный путь в ФС контейнера, куда можно подложить sql файлы. При первом старте оно подтянет эти файлы и применит изменения внутри БД (/docker-entrypoint-initdb.d)
+
+Нужно снять дамп с работающей БД в контейнере. К счастью, внутри mysql-образа есть команда mysqldump/
+Можно сделать это так:
+
+```
+[vagrant@localhost banners]$ sudo docker-compose run db mysqldump -udeveloper -p1234 -hdb mephi
+```
+
+Выведется много sql'а, который будет генерировать базу mephi в её текущем виде.
+Засунем это в файл init.sql в папку db
+
+```
+[vagrant@localhost banners]$ pwd
+/home/vagrant/banners
+[vagrant@localhost banners]$ mkdir db
+[vagrant@localhost banners]$ sudo docker-compose run db mysqldump -udeveloper -p1234 -hdb mephi > db/init.sql
+```
+
+Убедимся, что всё получилось
+
+```
+[vagrant@localhost banners]$ head db/init.sql 
+mysqldump: [Warning] Using a password on the command line interface can be insecure.
+-- MySQL dump 10.13  Distrib 5.7.25, for Linux (x86_64)
+--
+-- Host: db    Database: mephi
+-- ------------------------------------------------------
+-- Server version	5.7.25
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+```
+
+10. Подсунем этот файл в /docker-entrypoint-initdb.d в контейнер mysql через docker-compose.yml
+
+допишем вот это в docker-compose.yml в сервис db
+```
+    volumes:
+      - ./db:/docker-entrypoint-initdb.d
+```
+
+11. Теперь нужно проверить, что всё получилось: убиваем полностью контейнеры и поднимаем заново.
+
+```
+[vagrant@localhost banners]$ sudo docker-compose down
+Stopping banners_web_1 ... done
+Removing banners_db_run_1d3dda187c19  ... done
+Removing banners_db_run_7fb184308289  ... done
+Removing banners_db_run_df980624b8d8  ... done
+Removing banners_db_run_ebc435f22edf  ... done
+Removing banners_web_run_868c1fb4f5ae ... done
+Removing banners_db_run_759cc22a3a65  ... done
+Removing banners_db_run_644f1a7c98b9  ... done
+Removing banners_db_run_d2a975937650  ... done
+Removing banners_db_run_c7743e4c4ed3  ... done
+Removing banners_web_run_f3838db38636 ... done
+Removing banners_web_run_f553ecc866bf ... done
+Removing banners_web_run_e33a20c4ac9b ... done
+Removing banners_web_run_5266921cb018 ... done
+Removing banners_db_1                 ... done
+Removing banners_web_1                ... done
+Removing network banners_default
+```
+
+поднимаем:
+```
+[vagrant@localhost banners]$ sudo docker-compose up
+Creating network "banners_default" with the default driver
+Creating banners_db_1  ... done
+Creating banners_web_1 ... done
+Attaching to banners_web_1, banners_db_1
+db_1   | Initializing database
+
+....
+
+db_1   | Version: '5.7.25'  socket: '/var/run/mysqld/mysqld.sock'  port: 3306  MySQL Community Server (GPL)
+```
+
+пробуем залогиниться по тому же самому паролю: http://127.0.0.1:8000/admin/login/?next=/admin/
+
+успех!
