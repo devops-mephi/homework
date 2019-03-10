@@ -1,5 +1,21 @@
 # Docker-compose
 
+Перед запуском виртуалки пробросим еще несколько портов используя Vagrantfile
+```
+  config.vm.network "forwarded_port", guest: 8000, host: 8000
+  config.vm.network "forwarded_port", guest: 8001, host: 8001
+  config.vm.network "forwarded_port", guest: 8002, host: 8002
+  config.vm.network "forwarded_port", guest: 8003, host: 8003
+  config.vm.network "forwarded_port", guest: 8004, host: 8004
+  config.vm.network "forwarded_port", guest: 8005, host: 8005
+```
+
+После изменений в Vagrantfile нужно остановить и запустить виртуалку заново
+```
+vagrant halt
+vagrant up
+```
+
 ## Установка docker-compose
 
 в виртуалке с centos7
@@ -251,4 +267,226 @@ Removing network http_server_default
 
 Допустим, мы хотим начать разрабатывать приложение, которое написано на python, использует django и mysql. Мы хотим, чтобы среда для разработки этого приложения для другого разработчика поднималась по одной кнопке. Docker-compose позволяет нам это сделать. По сути это более удобный способ описывать и управлять несколькими docker-контейнерами. Всё описание хранится в одном файле, который имеет имя docker-compose.yml. После того, как в нем всё описано, одной командой 'docker-compose up' соберутся/скачаются нужные docker-образы и запустятся контейнеры, правильно связавшись между собой.
 
-Наш будущий проект будет использовать python3. 
+Наш будущий проект будет использовать python3. Будем использовать официальной image с установленным внутрь него python'ом: https://hub.docker.com/r/library/python
+
+1. Начнем с создания новой папки
+
+```
+[vagrant@localhost ~]$ mkdir banners
+[vagrant@localhost ~]$ cd banners/
+[vagrant@localhost banners]$
+```
+
+2. В ней Dockerfile
+
+```
+[vagrant@localhost banners]$ vi Dockerfile
+```
+следующего содержания:
+```
+FROM python:3.7
+
+WORKDIR /code/
+
+COPY requirements.txt ./
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+```
+
+3. В файле requiremets.txt ожидается понятный для pip список зависимостей, которые требуются для данного проекта. Мы будем использовать Django и базу данных mysql, значит нам нужен пакет mysqladmin.
+Это мы узнали из официальной документации Django: https://docs.djangoproject.com/en/2.1/ref/databases/#mysql-db-api-drivers
+
+```
+[vagrant@localhost banners]$ vi requirements.txt
+```
+содержания:
+```
+Django==2.1.7
+mysqlclient==1.4.2
+```
+
+4. Теперь docker-compose файл. Будем постепенно добавлять в него нужные опции. Начнем с простого:
+
+```
+[vagrant@localhost banners]$ vi docker-compose.yml
+```
+
+а в нем
+```
+version: '3'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/code
+```
+
+Строчка с volumes говорит нам пробросить текущую директорию внутри контейнера по пути /code. Это нужно затем, чтобы программисту не приходилось пересобирать каждый раз образ при правке кода (что было бы для него мучением)
+
+5. Попробуем собрать образ:
+
+```
+[vagrant@localhost banners]$ sudo docker-compose build
+Building web
+Step 1/5 : FROM python:3.7
+3.7: Pulling from library/python
+22dbe790f715: Pull complete
+0250231711a0: Pull complete
+6fba9447437b: Pull complete
+c2b4d327b352: Pull complete
+270e1baa5299: Pull complete
+8dc8edf0ab44: Pull complete
+86ded05de41b: Pull complete
+1eac5266a8fa: Pull complete
+61b3f1392c29: Pull complete
+Digest: sha256:166ad1e6ca19a4b84a8907d41c985549d89e80ceed2f7eafd90dca3e328de23e
+Status: Downloaded newer image for python:3.7
+ ---> 32260605cf7a
+Step 2/5 : WORKDIR /code/
+ ---> Running in 21181b37e853
+Removing intermediate container 21181b37e853
+ ---> a1097e3a0310
+Step 3/5 : COPY requirements.txt ./
+ ---> 9c4fc5c92aff
+Step 4/5 : RUN pip install --no-cache-dir -r requirements.txt
+ ---> Running in f7cb04c9cf2e
+Collecting Django==2.1.7 (from -r requirements.txt (line 1))
+  Downloading https://files.pythonhosted.org/packages/c7/87/fbd666c4f87591ae25b7bb374298e8629816e87193c4099d3608ef11fab9/Django-2.1.7-py3-none-any.whl (7.3MB)
+Collecting mysqlclient==1.4.2 (from -r requirements.txt (line 2))
+  Downloading https://files.pythonhosted.org/packages/73/79/67ddf24ac31b05d741f0ac87fa612c7a11bab1b39b8270ed7344d149f8af/mysqlclient-1.4.2.tar.gz (85kB)
+Collecting pytz (from Django==2.1.7->-r requirements.txt (line 1))
+  Downloading https://files.pythonhosted.org/packages/61/28/1d3920e4d1d50b19bc5d24398a7cd85cc7b9a75a490570d5a30c57622d34/pytz-2018.9-py2.py3-none-any.whl (510kB)
+Installing collected packages: pytz, Django, mysqlclient
+  Running setup.py install for mysqlclient: started
+    Running setup.py install for mysqlclient: finished with status 'done'
+Successfully installed Django-2.1.7 mysqlclient-1.4.2 pytz-2018.9
+Removing intermediate container f7cb04c9cf2e
+ ---> ee97cea9ae6d
+Step 5/5 : COPY . .
+ ---> 72af71c4cab5
+Successfully built 72af71c4cab5
+Successfully tagged banners_web:latest
+```
+
+Всё сработало.
+
+6. Как мы знаем из документации django, создать начальные файлы для проекта можно следующей командой:
+
+```
+django-admin startproject mysite
+```
+
+Сделать это в нашем случае (внутри контейнера) можно следующим образом:
+
+```
+[vagrant@localhost banners]$ sudo docker-compose run web django-admin startproject banners .
+[vagrant@localhost banners]$
+```
+мы добавили точку в конце, чтобы django не создала еще одну промежуточную папку, а положила manage.py сразу в текущую директорию
+
+7. Посмотрим, что получилось:
+
+```
+[vagrant@localhost banners]$ ls -lh
+total 16K
+-rw-rw-r--. 1 vagrant vagrant 121 Mar 10 12:32 Dockerfile
+drwxr-xr-x. 2 root    root     74 Mar 10 12:44 banners
+-rw-rw-r--. 1 vagrant vagrant 104 Mar 10 12:41 docker-compose.yml
+-rwxr-xr-x. 1 root    root    539 Mar 10 12:44 manage.py
+-rw-rw-r--. 1 vagrant vagrant  33 Mar 10 12:27 requirements.txt
+```
+
+Команда django-admin создала файл manage.py и папку banners. Как мы видим, файлы принадлежат пользователю root. Это потому что внутри контейнера все выполнялось из-под root.
+
+8. Исправим права
+
+```
+[vagrant@localhost banners]$ sudo chown -R vagrant:vagrant .
+[vagrant@localhost banners]$ ls -lh
+total 16K
+-rw-rw-r--. 1 vagrant vagrant 121 Mar 10 12:32 Dockerfile
+drwxr-xr-x. 2 vagrant vagrant  74 Mar 10 12:44 banners
+-rw-rw-r--. 1 vagrant vagrant 104 Mar 10 12:41 docker-compose.yml
+-rwxr-xr-x. 1 vagrant vagrant 539 Mar 10 12:44 manage.py
+-rw-rw-r--. 1 vagrant vagrant  33 Mar 10 12:27 requirements.txt
+```
+
+9. Запустить проект теперь можно так:
+
+```
+[vagrant@localhost banners]$ sudo docker-compose run web python manage.py runserver 0.0.0.0:8000
+Performing system checks...
+
+System check identified no issues (0 silenced).
+
+You have 15 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): admin, auth, contenttypes, sessions.
+Run 'python manage.py migrate' to apply them.
+
+March 10, 2019 - 12:47:55
+Django version 2.1.7, using settings 'banners.settings'
+Starting development server at http://0.0.0.0:8000/
+Quit the server with CONTROL-C.
+^C
+```
+
+10. Убедившись, что проект запускается, пропишем строку запуска сразу в Dockerfile
+
+```
+[vagrant@localhost banners]$ echo 'CMD python manage.py runserver 0.0.0.0:8000' >> Dockerfile
+```
+
+11. Пересоберем образ
+
+```
+[vagrant@localhost banners]$ sudo docker-compose build
+Building web
+Step 1/6 : FROM python:3.7
+ ---> 32260605cf7a
+Step 2/6 : WORKDIR /code/
+ ---> Using cache
+ ---> a1097e3a0310
+Step 3/6 : COPY requirements.txt ./
+ ---> Using cache
+ ---> 9c4fc5c92aff
+Step 4/6 : RUN pip install --no-cache-dir -r requirements.txt
+ ---> Using cache
+ ---> ee97cea9ae6d
+Step 5/6 : COPY . .
+ ---> 44b6d9893591
+Step 6/6 : CMD python manage.py runserver 0.0.0.0:8000
+ ---> Running in cdc6e61762b9
+Removing intermediate container cdc6e61762b9
+ ---> e4c590eed70c
+Successfully built e4c590eed70c
+Successfully tagged banners_web:latest
+```
+
+12. Запустим
+
+```
+[vagrant@localhost banners]$ sudo docker-compose up
+Creating banners_web_1 ... done
+Attaching to banners_web_1
+```
+
+13. Откроем еще одну консоль и попробуем подключиться
+
+```
+[vagrant@localhost http_server]$ curl 127.0.0.1:8000
+
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Django: the Web framework for perfectionists with deadlines.</title>
+
+....
+
+```
+
+
