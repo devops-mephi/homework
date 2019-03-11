@@ -538,7 +538,7 @@ services:
     ports:
       - "3306:3306"
     environment:
-      MYSQL_RANDOM_ROOT_PASSWORD: yes
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
       MYSQL_USER: developer
       MYSQL_PASSWORD: 1234
       MYSQL_DATABASE: mephi
