@@ -1,13 +1,8 @@
 # Docker-compose
 
-Перед запуском виртуалки пробросим еще несколько портов используя Vagrantfile
+Перед запуском виртуалки пробросим еще порт 8000 используя Vagrantfile
 ```
   config.vm.network "forwarded_port", guest: 8000, host: 8000
-  config.vm.network "forwarded_port", guest: 8001, host: 8001
-  config.vm.network "forwarded_port", guest: 8002, host: 8002
-  config.vm.network "forwarded_port", guest: 8003, host: 8003
-  config.vm.network "forwarded_port", guest: 8004, host: 8004
-  config.vm.network "forwarded_port", guest: 8005, host: 8005
 ```
 
 После изменений в Vagrantfile нужно остановить и запустить виртуалку заново
