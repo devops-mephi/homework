@@ -79,3 +79,7 @@ build:
   tags:
     - vagrant
 ```
+
+6. Когда мы запушим изменение из пункта 5, должна автоматически запуститься сборка 
+
+![Gitlab CI job](images/gitlab-ci-job.png)
