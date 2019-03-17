@@ -712,3 +712,54 @@ ERROR: Job failed: exit code 1
 Теперь на странице merge-request'а написано, какие тесты не прошли и более подробная информация
 
 ![Gitlab Test Report](images/gitlab-test-report.png)
+
+Итоговый .gitlab-ci.yml:
+
+```
+stages:
+  - build
+  - test
+
+build:
+  stage: build
+  script:
+    - whoami
+    - docker build -t banners_web:$CI_BUILD_REF_NAME .
+  tags:
+    - vagrant
+    
+build_in_docker:
+  services:
+    - docker:dind
+  stage: build
+  variables:
+    DOCKER_HOST: tcp://docker:2375/
+  script:
+    - whoami
+    - docker build -t banners_web:$CI_BUILD_REF_NAME .
+  tags:
+    - docker_in_docker
+  when: manual
+
+unit-test:
+  image: banners_web:$CI_BUILD_REF_NAME
+  stage: test
+  services:
+    - name: mysql:5.7
+      alias: db
+  tags:
+    - docker_in_docker
+  variables:
+    GIT_STRATEGY: none
+    MYSQL_ROOT_PASSWORD: root_1234
+    BANNERS_DATABASE_USER: root
+    BANNERS_DATABASE_PASSWORD: root_1234
+  script:
+    - whoami
+    - export TEST_OUTPUT_DIR=`pwd`
+    - cd /code/
+    - python manage.py test
+  artifacts:
+    reports:
+      junit: unittest.xml
+```
