@@ -654,3 +654,61 @@ artifacts:
     reports:
       junit: /code/unittest.xml
 ```
+
+---- тут надо описать как так просто не получилось ----
+
+12. Сделаем так, чтобы TEST_OUTPUT_DIR бралось из переменной окружения:
+
+banners/settings.py
+```
+TEST_OUTPUT_DIR = os.environ.get('TEST_OUTPUT_DIR', '/code/')
+
+```
+
+А в .gitlab-ci.yml пропишем такой скрипт:
+```
+script:
+    - export TEST_OUTPUT_DIR=`pwd`
+    - cd /code/
+    - python manage.py test
+```
+
+То есть пробросим в эту переменную build path до смены директории.
+
+И...
+Всё получилось:
+
+```
+$ export TEST_OUTPUT_DIR=`pwd`
+$ cd /code/
+$ python manage.py test
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+
+Running tests...
+----------------------------------------------------------------------
+..F
+======================================================================
+FAIL [0.001s]: test_true (banners.tests.ExampleTestCase)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/code/banners/tests.py", line 11, in test_true
+    self.assertTrue('a' in 'hello')
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.010s
+
+FAILED (failures=1)
+
+Generating XML reports...
+Destroying test database for alias 'default'...
+Uploading artifacts...
+unittest.xml: found 1 matching files               
+Uploading artifacts to coordinator... ok            id=76 responseStatus=201 Created token=ahG_ViUS
+ERROR: Job failed: exit code 1
+```
+
+Теперь на странице merge-request'а написано, какие тесты не прошли и более подробная информация
+
+![Gitlab Test Report](images/gitlab-test-report.png)
