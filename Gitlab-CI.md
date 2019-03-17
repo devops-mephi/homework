@@ -497,6 +497,34 @@ MySQLdb._exceptions.OperationalError: (1045, "Access denied for user 'developer'
 ```
 
 Важно отметить:
-gitlab не стал снова скачавать из интернета образ mysql:5.7 потому что мы его уже использовали.
-"Waiting for services to be up and running..." — gitlab более умен, чем docker-compose и ждет запуска сервиса после того, как он стартанул контейнер. Ждет он следующим образом: для каждого порта, описанного в EXPOSE, дожидается, пока он не станет доступен.
-"MySQLdb._exceptions.OperationalError: (1045, "Access denied for user 'developer'@'172.17.0.3' (using password: YES)")" — база данных есть, но нам не удалось к ней подключиться, потому что в настройках прописан пользователь developer.
+- gitlab не стал снова скачавать из интернета образ mysql:5.7 потому что мы его уже использовали.
+- "Waiting for services to be up and running..." — gitlab более умен, чем docker-compose и ждет запуска сервиса после того, как он стартанул контейнер. Ждет он следующим образом: для каждого порта, описанного в EXPOSE, дожидается, пока он не станет доступен.
+- "MySQLdb._exceptions.OperationalError: (1045, "Access denied for user 'developer'@'172.17.0.3' (using password: YES)")" — база данных есть, но нам не удалось к ней подключиться, потому что в настройках прописан пользователь developer.
+
+7. Переопределение настроек.
+
+Что нам нужно сделать: при запуске проекта в сборке unit-test переопределить настройки DATABASES.
+Реализуем это с помощью ENVIRONMENT-переменных.
+
+Поправим banners/settings.py следующим образом:
+```
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.environ.get('BANNERS_DATABASE_NAME', 'mephi'),
+        'USER':  os.environ.get('BANNERS_DATABASE_USER', 'developer'),
+        'PASSWORD': os.environ.get('BANNERS_DATABASE_PASSWORD', '1234'),
+        'HOST': os.environ.get('BANNERS_DATABASE_HOST', 'db'),
+        'PORT': os.environ.get('BANNERS_DATABASE_PORT', '3306'),
+    }
+}
+```
+
+А в .gitlab-ci.yml пропишем эти переменные
+```
+variables:
+    GIT_STRATEGY: none
+    MYSQL_ROOT_PASSWORD: root_1234
+    BANNERS_DATABASE_USER: root
+    BANNERS_DATABASE_PASSWORD: root_1234
+```
