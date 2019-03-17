@@ -558,3 +558,99 @@ Ran 0 tests in 0.000s
 OK
 Job succeeded
 ```
+
+8. Попробуем написать какие-нибудь тесты
+
+Создадим файл banners/tests.py
+и в него напишем следующее:
+
+```
+from django.test import TestCase
+
+class ExampleTestCase(TestCase):
+    def test_one_equal_another(self):
+        self.assertEqual(1,1)
+
+    def test_not_equal(self):
+        self.assertNotEqual(2,1)
+    
+    def test_true(self):
+        self.assertTrue('a' in 'hello')
+```
+
+Получаем такой вывод:
+```
+$ python manage.py test
+..F
+======================================================================
+FAIL: test_true (banners.tests.ExampleTestCase)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/code/banners/tests.py", line 11, in test_true
+    self.assertTrue('a' in 'hello')
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.003s
+
+FAILED (failures=1)
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+Destroying test database for alias 'default'...
+ERROR: Job failed: exit code 1
+```
+
+9. Существует способ получить информацию о пройденных тестах более удобно. Это junit-файлы. Это xml файл с данными о каждом запущенном тесте и результате. Gitlab CI умеет парсить такие файлы и отображать в merge-request'ах подробную информацию.
+
+Для python есть модуль xmlrunner, который позволяет такое делать.
+Добавим его в requirements.txt
+
+```
+Django==2.1.7
+mysqlclient==1.4.2
+unittest-xml-reporting==2.4.0
+```
+
+А в banners/settings.py пропишем этот Runner тестов вместо стандартного:
+```
+TEST_RUNNER = 'xmlrunner.extra.djangotestrunner.XMLTestRunner'
+TEST_OUTPUT_VERBOSE = True
+TEST_OUTPUT_FILE_NAME = "unittest.xml"
+TEST_OUTPUT_DIR = "/code/"
+
+```
+
+Получается:
+```
+$ python manage.py test
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+
+Running tests...
+----------------------------------------------------------------------
+..F
+======================================================================
+FAIL [0.001s]: test_true (banners.tests.ExampleTestCase)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/code/banners/tests.py", line 11, in test_true
+    self.assertTrue('a' in 'hello')
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.010s
+
+FAILED (failures=1)
+
+Generating XML reports...
+Destroying test database for alias 'default'...
+```
+Вроде сработало. Осталось сказать gitlab ci где искать файл
+
+10. Дописываем в gitlab-ci.yml
+
+```
+artifacts:
+    reports:
+      junit: /code/unittest.xml
+```
