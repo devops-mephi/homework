@@ -224,3 +224,37 @@ sudo vi /etc/gitlab-runner/config.toml
 ![Gitlab CI success](images/gitlab-docker-success.png)
 
 PS: если бы наш гитлаб жил на нормальной отдельной машине с собственным настоящим доменным именем, это шаманство с IP адресами бы не потребовалось.
+
+7. Отключим пока автоматический запуск этой сборки (потому что она слишком долгая и будет нам мешаться)
+
+Допишем в .gitlab-ci.yaml строчку "when: manual"
+
+```
+stages:
+  - build
+
+build:
+  stage: build
+  script:
+    - whoami
+    - docker build -t banners_web:$CI_BUILD_REF_NAME .
+  tags:
+    - vagrant
+    
+build_in_docker:
+  services:
+    - docker:dind
+  stage: build
+  variables:
+    DOCKER_HOST: tcp://docker:2375/
+  script:
+    - whoami
+    - docker build -t banners_web:$CI_BUILD_REF_NAME .
+  tags:
+    - docker_in_docker
+  when: manual
+```
+
+Видим, что теперь сборка автоматически не запустилась, а появилась кнопка, по которой её можно запустить
+
+![Gitlab CI manual](images/gitlab-manual.png)
