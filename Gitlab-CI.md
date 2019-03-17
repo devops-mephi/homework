@@ -75,7 +75,7 @@ build:
   stage: build
   script:
     - whoami
-    - docker build .
+    - docker build -t banners_web:$CI_BUILD_REF_NAME .
   tags:
     - vagrant
 ```
@@ -83,6 +83,7 @@ build:
 6. Когда мы запушим изменение из пункта 5, должна автоматически запуститься сборка 
 
 ![Gitlab CI job](images/gitlab-ci-job.png)
+
 
 ## Docker runner
 
@@ -108,27 +109,26 @@ sudo gitlab-runner register -n \
 2. Допишем .gitlab-ci файл:
 
 ```
-services:
-  - docker:dind
-
 stages:
   - build
 
-build_in_shell:
+build:
   stage: build
   script:
     - whoami
-    - docker build .
+    - docker build -t banners_web:$CI_BUILD_REF_NAME .
   tags:
     - vagrant
-
+    
 build_in_docker:
+  services:
+    - docker:dind
   stage: build
   variables:
     DOCKER_HOST: tcp://docker:2375/
   script:
     - whoami
-    - docker build .
+    - docker build -t banners_web:$CI_BUILD_REF_NAME .
   tags:
     - docker_in_docker
 ```
@@ -164,6 +164,12 @@ sudo vi /etc/gitlab-runner/config.toml
 допишем следующую строчку в runners.runners.docker
 ```
     extra_hosts = ["gitlab.mephi:127.0.0.1"]
+```
+и перезапустим раннеры
+
+```
+[vagrant@localhost banners]$ sudo gitlab-runner restart
+Runtime platform                                    arch=amd64 os=linux pid=18901 revision=4745a6f3 version=11.8.0
 ```
 
 5. Пробуем заново:
