@@ -528,3 +528,33 @@ variables:
     BANNERS_DATABASE_USER: root
     BANNERS_DATABASE_PASSWORD: root_1234
 ```
+
+И, успех!
+```
+Running with gitlab-runner 11.8.0 (4745a6f3)
+  on Vagrant Docker pvb9SWyA
+Using Docker executor with image banners_web:master ...
+Starting service mysql:5.7 ...
+Using locally found image version due to if-not-present pull policy
+Using docker image sha256:ee7cbd482336a1f49b7038527a547f0f25b23a78d46350845e70a1cf7e5a22af for mysql:5.7 ...
+Waiting for services to be up and running...
+Using locally found image version due to if-not-present pull policy
+Using docker image sha256:962408e44881bc705de2184a88316bf6bd344c29efaaa66986a72279a419c226 for banners_web:master ...
+Running on runner-pvb9SWyA-project-1-concurrent-0 via localhost.localdomain...
+Skipping Git repository setup
+Skipping Git checkout
+Skipping Git submodules setup
+$ whoami
+root
+$ cd /code/
+$ python manage.py test
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+Destroying test database for alias 'default'...
+
+----------------------------------------------------------------------
+Ran 0 tests in 0.000s
+
+OK
+Job succeeded
+```
