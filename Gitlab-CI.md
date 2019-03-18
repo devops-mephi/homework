@@ -655,7 +655,44 @@ artifacts:
       junit: /code/unittest.xml
 ```
 
----- тут надо описать как так просто не получилось ----
+
+Получаем:
+```
+$ whoami
+root
+$ cd /code/
+$ python manage.py test
+Creating test database for alias 'default'...
+System check identified no issues (0 silenced).
+
+Running tests...
+----------------------------------------------------------------------
+  test_not_equal (banners.tests.ExampleTestCase) ... OK (0.007s)
+  test_one_equal_another (banners.tests.ExampleTestCase) ... OK (0.000s)
+  test_true (banners.tests.ExampleTestCase) ... FAIL (0.001s)
+
+======================================================================
+FAIL [0.001s]: test_true (banners.tests.ExampleTestCase)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/code/banners/tests.py", line 11, in test_true
+    self.assertTrue('a' in 'hello')
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.011s
+
+FAILED (failures=1)
+
+Generating XML reports...
+Destroying test database for alias 'default'...
+Uploading artifacts...
+WARNING: /code/unittest.xml: no matching files           
+ERROR: No files to upload                          
+ERROR: Job failed: exit code 1
+```
+
+Сэкономлю вам долгие поиски причины, почему это не сработало. В общем, gitlab-ci умеет забирать артифакты только из рабочей директории. Поэтому придётся сделать вот так.
 
 12. Сделаем так, чтобы TEST_OUTPUT_DIR бралось из переменной окружения:
 
