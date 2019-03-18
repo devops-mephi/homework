@@ -8,6 +8,4 @@
 
 * [Протокол занятия 3 (docker-compose)](Docker-compose.md)
 
-* [Протокол занятия 3 (gitlab-ci)](Gitlab-CI.md)
-
-* [Задание номер 3 (flake8 сборка)](Homework3.md)
+* [Задание номер 3 (последовательный запуск контейнеров)](Homework3.md)
