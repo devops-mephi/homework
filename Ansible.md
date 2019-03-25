@@ -17,7 +17,7 @@ Vagrant.configure("2") do |config|
   config.vm.box = "centos/7"
   config.vm.network "private_network", ip: "10.2.0.10"
   config.vm.provider "virtualbox" do |v|
-    v.memory = 256
+    v.memory = 512
     v.cpus = 1
   config.vm.provision "shell",
     inline: "yum -y install epel-release && yum -y install ansible"
@@ -455,6 +455,7 @@ localhost                  : ok=6    changed=5    unreachable=0    failed=0
 Мы видим, что выполнение задач происходит последовательно, пока на каждом сервере не выполнится, следующая не запускается.
 
 3. Установим molecule с помощью роли ansible
+Пишем роль исходя из официальной инструкции https://molecule.readthedocs.io/en/latest/installation.html
 
 ```
 [vagrant@st91 ansible]$ vi playbooks/setup_molecule.yml
@@ -571,4 +572,486 @@ platforms:
   - name: instance
     image: centos:7
     privileged: true
+```
+
+7. Попробуем поднять среду для тестов
+
+```
+[vagrant@st91 docker]$ molecule create
+--> Validating schema /home/vagrant/ansible/roles/docker/molecule/default/molecule.yml.
+Validation completed successfully.
+--> Test matrix
+
+└── default
+    ├── create
+    └── prepare
+
+--> Scenario: 'default'
+--> Action: 'create'
+
+    PLAY [Create] ******************************************************************
+
+    TASK [Log into a Docker registry] **********************************************
+    skipping: [localhost] => (item=None)
+
+    TASK [Create Dockerfiles from image names] *************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Discover local Docker images] ********************************************
+    failed: [localhost] (item=None) => {"censored": "the output has been hidden due to the fact that 'no_log: true' was specified for this result", "changed": false}
+    fatal: [localhost]: FAILED! => {"censored": "the output has been hidden due to the fact that 'no_log: true' was specified for this result", "changed": false}
+
+    PLAY RECAP *********************************************************************
+    localhost                  : ok=1    changed=1    unreachable=0    failed=1
+
+
+ERROR:
+```
+
+Хм, что-то не получилось, а что — непонятно.
+Чтобы увидеть более подробный лог нужно добавить --debug
+
+```
+[vagrant@st91 docker]$ molecule --debug create
+--> Validating schema /home/vagrant/ansible/roles/docker/molecule/default/molecule.yml.
+Validation completed successfully.
+--> Test matrix
+...
+
+
+       "msg": "Failed to import docker or docker-py - No module named docker. Try `pip install docker` or `pip install docker-py` (Python 2.6)"
+    }
+
+    PLAY RECAP *********************************************************************
+    localhost                  : ok=1    changed=0    unreachable=0    failed=1
+
+
+ERROR:
+```
+
+Не хватает docker-библиотеки для python. 
+
+Допишем в плейбук по установке молекулы
+playbooks/setup_molecule.yml
+```
+    - name: Install python docker
+      pip:
+        name:
+          - docker
+```
+
+```
+[vagrant@st91 ansible]$ ansible-playbook playbooks/setup_molecule.yml
+
+PLAY [localhost] **************************************************************************************************************************************************************
+
+TASK [Gathering Facts] ********************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Add EPEL repository] ****************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Installing dependencies] ************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Upgrade pip] ************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Install python docker] **************************************************************************************************************************************************
+changed: [localhost]
+
+TASK [Install molecule] *******************************************************************************************************************************************************
+changed: [localhost]
+
+PLAY RECAP ********************************************************************************************************************************************************************
+localhost                  : ok=6    changed=1    unreachable=0    failed=0
+```
+
+
+Пробуем
+
+```
+[vagrant@st91 docker]$ molecule create
+--> Validating schema /home/vagrant/ansible/roles/docker/molecule/default/molecule.yml.
+Validation completed successfully.
+--> Test matrix
+
+└── default
+    ├── create
+    └── prepare
+
+--> Scenario: 'default'
+--> Action: 'create'
+Skipping, instances already created.
+--> Scenario: 'default'
+--> Action: 'prepare'
+Skipping, prepare playbook not configured.
+```
+
+Успех!
+
+После этого контейнер не убивается, он продолжает висеть
+
+```
+[vagrant@st91 docker]$ docker ps
+CONTAINER ID        IMAGE                     COMMAND                  CREATED             STATUS              PORTS               NAMES
+f2af967b1b18        molecule_local/centos:7   "bash -c 'while true…"   2 minutes ago       Up 2 minutes                            instance
+[vagrant@st91 docker]$ molecule list
+--> Validating schema /home/vagrant/ansible/roles/docker/molecule/default/molecule.yml.
+Validation completed successfully.
+Instance Name    Driver Name    Provisioner Name    Scenario Name    Created    Converged
+---------------  -------------  ------------------  ---------------  ---------  -----------
+instance         docker         ansible             default          true       false
+```
+
+8. Начнем перетаскивать таски из плейбука по установке докера в нашу роль.
+
+```
+[vagrant@st91 docker]$ vi tasks/main.yml
+```
+
+```
+---
+
+- name: installing dependencies
+  yum:
+    name:
+      - yum-utils
+      - device-mapper-persistent-data
+      - lvm2
+```
+
+Запустить плейбук с этими задачами (плейбук лежит в molecule/default/playbook.yml) можно так:
+
+```
+[vagrant@st91 docker]$ molecule converge
+--> Validating schema /home/vagrant/ansible/roles/docker/molecule/default/molecule.yml.
+Validation completed successfully.
+--> Test matrix
+
+└── default
+    ├── dependency
+    ├── create
+    ├── prepare
+    └── converge
+
+--> Scenario: 'default'
+--> Action: 'dependency'
+Skipping, missing the requirements file.
+--> Scenario: 'default'
+--> Action: 'create'
+Skipping, instances already created.
+--> Scenario: 'default'
+--> Action: 'prepare'
+Skipping, prepare playbook not configured.
+--> Scenario: 'default'
+--> Action: 'converge'
+
+    PLAY [Converge] ****************************************************************
+
+    TASK [Gathering Facts] *********************************************************
+    ok: [instance]
+
+    TASK [docker : installing dependencies] ****************************************
+    changed: [instance]
+
+    PLAY RECAP *********************************************************************
+    instance                   : ok=2    changed=1    unreachable=0    failed=0
+
+```
+
+Зайти и посмотреть, как всё прошло и что теперь на тестовой "машине" (а на самом деле в контейнере) можно так (не вводя всякие docker exec -ti)
+```
+molecule login
+```
+
+Мы попали в шелл внутри контейнера. Можно убедиться, что то, что мы ставили, установилось:
+```
+[root@instance /]# rpm -qa | grep lvm2
+lvm2-libs-2.02.180-10.el7_6.3.x86_64
+lvm2-2.02.180-10.el7_6.3.x86_64
+```
+
+Прибить контейнер и начать всё заново можно так:
+```
+molecule destroy
+```
+
+9. Полный цикл тестов можно запустить одной командой
+
+```
+[vagrant@st91 docker]$ molecule test
+--> Validating schema /home/vagrant/ansible/roles/docker/molecule/default/molecule.yml.
+Validation completed successfully.
+--> Test matrix
+
+└── default
+    ├── lint
+    ├── cleanup
+    ├── destroy
+    ├── dependency
+    ├── syntax
+    ├── create
+    ├── prepare
+    ├── converge
+    ├── idempotence
+    ├── side_effect
+    ├── verify
+    ├── cleanup
+    └── destroy
+
+--> Scenario: 'default'
+--> Action: 'lint'
+--> Executing Yamllint on files found in /home/vagrant/ansible/roles/docker/...
+Lint completed successfully.
+--> Executing Flake8 on files found in /home/vagrant/ansible/roles/docker/molecule/default/tests/...
+Lint completed successfully.
+--> Executing Ansible Lint on /home/vagrant/ansible/roles/docker/molecule/default/playbook.yml...
+    [701] Role info should contain platforms
+    /home/vagrant/ansible/roles/docker/meta/main.yml:2
+    {'meta/main.yml': {'__file__': u'/home/vagrant/ansible/roles/docker/meta/main.yml', u'dependencies': [], u'galaxy_info': {u'description': u'your description', u'license': u'license (GPLv2, CC-BY, etc)', u'author': u'your name', u'company': u'your company (optional)', u'galaxy_tags': [], '__line__': 3, '__file__': u'/home/vagrant/ansible/roles/docker/meta/main.yml', u'min_ansible_version': 1.2}, '__line__': 2}}
+
+    [703] Should change default metadata: author
+---
+    /home/vagrant/ansible/roles/docker/meta/main.yml:2
+    {'meta/main.yml': {'__file__': u'/home/vagrant/ansible/roles/docker/meta/main.yml', u'dependencies': [], u'galaxy_info': {u'description': u'your description', u'license': u'license (GPLv2, CC-BY, etc)', u'author': u'your name', u'company': u'your company (optional)', u'galaxy_tags': [], '__line__': 3, '__file__': u'/home/vagrant/ansible/roles/docker/meta/main.yml', u'min_ansible_version': 1.2}, '__line__': 2}}
+
+    [703] Should change default metadata: description
+    /home/vagrant/ansible/roles/docker/meta/main.yml:2
+    {'meta/main.yml': {'__file__': u'/home/vagrant/ansible/roles/docker/meta/main.yml', u'dependencies': [], u'galaxy_info': {u'description': u'your description', u'license': u'license (GPLv2, CC-BY, etc)', u'author': u'your name', u'company': u'your company (optional)', u'galaxy_tags': [], '__line__': 3, '__file__': u'/home/vagrant/ansible/roles/docker/meta/main.yml', u'min_ansible_version': 1.2}, '__line__': 2}}
+
+    [703] Should change default metadata: company
+    /home/vagrant/ansible/roles/docker/meta/main.yml:2
+    {'meta/main.yml': {'__file__': u'/home/vagrant/ansible/roles/docker/meta/main.yml', u'dependencies': [], u'galaxy_info': {u'description': u'your description', u'license': u'license (GPLv2, CC-BY, etc)', u'author': u'your name', u'company': u'your company (optional)', u'galaxy_tags': [], '__line__': 3, '__file__': u'/home/vagrant/ansible/roles/docker/meta/main.yml', u'min_ansible_version': 1.2}, '__line__': 2}}
+
+    [703] Should change default metadata: license
+    /home/vagrant/ansible/roles/docker/meta/main.yml:2
+    {'meta/main.yml': {'__file__': u'/home/vagrant/ansible/roles/docker/meta/main.yml', u'dependencies': [], u'galaxy_info': {u'description': u'your description', u'license': u'license (GPLv2, CC-BY, etc)', u'author': u'your name', u'company': u'your company (optional)', u'galaxy_tags': [], '__line__': 3, '__file__': u'/home/vagrant/ansible/roles/docker/meta/main.yml', u'min_ansible_version': 1.2}, '__line__': 2}}
+
+An error occurred during the test sequence action: 'lint'. Cleaning up.
+--> Scenario: 'default'
+--> Action: 'destroy'
+
+    PLAY [Destroy] *****************************************************************
+
+    TASK [Destroy molecule instance(s)] ********************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Wait for instance(s) deletion to complete] *******************************
+    ok: [localhost] => (item=None)
+    ok: [localhost]
+
+    TASK [Delete docker network(s)] ************************************************
+
+    PLAY RECAP *********************************************************************
+    localhost                  : ok=2    changed=1    unreachable=0    failed=0
+
+```
+
+Ansible-lint просит нас указать платформу, автора, описание, компанию и лицензию, по которой сделана наша роль. Можно отключать отдельный проверки следующим образом:
+
+molecule/default/molecule.yml
+```
+provisioner:
+  name: ansible
+  lint:
+    name: ansible-lint
+    options:
+      x: ["701", "703"]
+```
+
+Теперь
+```
+[vagrant@st91 docker]$ molecule test
+--> Validating schema /home/vagrant/ansible/roles/docker/molecule/default/molecule.yml.
+Validation completed successfully.
+--> Test matrix
+
+└── default
+    ├── lint
+    ├── cleanup
+    ├── destroy
+    ├── dependency
+    ├── syntax
+    ├── create
+    ├── prepare
+    ├── converge
+    ├── idempotence
+    ├── side_effect
+    ├── verify
+    ├── cleanup
+    └── destroy
+
+--> Scenario: 'default'
+--> Action: 'lint'
+--> Executing Yamllint on files found in /home/vagrant/ansible/roles/docker/...
+Lint completed successfully.
+--> Executing Flake8 on files found in /home/vagrant/ansible/roles/docker/molecule/default/tests/...
+Lint completed successfully.
+--> Executing Ansible Lint on /home/vagrant/ansible/roles/docker/molecule/default/playbook.yml...
+Lint completed successfully.
+--> Scenario: 'default'
+--> Action: 'cleanup'
+Skipping, cleanup playbook not configured.
+--> Scenario: 'default'
+--> Action: 'destroy'
+
+    PLAY [Destroy] *****************************************************************
+
+    TASK [Destroy molecule instance(s)] ********************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Wait for instance(s) deletion to complete] *******************************
+    ok: [localhost] => (item=None)
+    ok: [localhost]
+
+    TASK [Delete docker network(s)] ************************************************
+
+    PLAY RECAP *********************************************************************
+    localhost                  : ok=2    changed=1    unreachable=0    failed=0
+
+
+--> Scenario: 'default'
+--> Action: 'dependency'
+Skipping, missing the requirements file.
+--> Scenario: 'default'
+--> Action: 'syntax'
+
+    playbook: /home/vagrant/ansible/roles/docker/molecule/default/playbook.yml
+
+--> Scenario: 'default'
+--> Action: 'create'
+
+    PLAY [Create] ******************************************************************
+
+    TASK [Log into a Docker registry] **********************************************
+    skipping: [localhost] => (item=None)
+
+    TASK [Create Dockerfiles from image names] *************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Discover local Docker images] ********************************************
+    ok: [localhost] => (item=None)
+    ok: [localhost]
+
+    TASK [Build an Ansible compatible image] ***************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Create docker network(s)] ************************************************
+
+    TASK [Determine the CMD directives] ********************************************
+    ok: [localhost] => (item=None)
+    ok: [localhost]
+
+    TASK [Create molecule instance(s)] *********************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Wait for instance(s) creation to complete] *******************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    PLAY RECAP *********************************************************************
+    localhost                  : ok=6    changed=4    unreachable=0    failed=0
+
+
+--> Scenario: 'default'
+--> Action: 'prepare'
+Skipping, prepare playbook not configured.
+--> Scenario: 'default'
+--> Action: 'converge'
+
+    PLAY [Converge] ****************************************************************
+
+    TASK [Gathering Facts] *********************************************************
+    ok: [instance]
+
+    TASK [docker : installing dependencies] ****************************************
+    changed: [instance]
+
+    PLAY RECAP *********************************************************************
+    instance                   : ok=2    changed=1    unreachable=0    failed=0
+
+
+--> Scenario: 'default'
+--> Action: 'idempotence'
+Idempotence completed successfully.
+--> Scenario: 'default'
+--> Action: 'side_effect'
+Skipping, side effect playbook not configured.
+--> Scenario: 'default'
+--> Action: 'verify'
+--> Executing Testinfra tests found in /home/vagrant/ansible/roles/docker/molecule/default/tests/...
+    ============================= test session starts ==============================
+    platform linux2 -- Python 2.7.5, pytest-4.3.1, py-1.8.0, pluggy-0.9.0
+    rootdir: /home/vagrant/ansible/roles/docker/molecule/default, inifile:
+    plugins: testinfra-1.19.0
+collected 1 item
+
+    tests/test_default.py .                                                  [100%]
+
+    ========================== 1 passed in 15.88 seconds ===========================
+Verifier completed successfully.
+--> Scenario: 'default'
+--> Action: 'cleanup'
+Skipping, cleanup playbook not configured.
+--> Scenario: 'default'
+--> Action: 'destroy'
+
+    PLAY [Destroy] *****************************************************************
+
+    TASK [Destroy molecule instance(s)] ********************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Wait for instance(s) deletion to complete] *******************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Delete docker network(s)] ************************************************
+
+    PLAY RECAP *********************************************************************
+    localhost                  : ok=2    changed=2    unreachable=0    failed=0
+
+
+```
+
+10. Давайте заполним всю роль по установке докера и проверим, что она работает
+
+tasks/main.yml
+```
+---
+
+- name: installing dependencies
+  yum:
+    name:
+      - yum-utils
+      - device-mapper-persistent-data
+      - lvm2
+
+- name: Add Docker GPG key
+  rpm_key:
+    key: https://download.docker.com/linux/centos/gpg
+    state: present
+
+- name: Add Docker repository.
+  get_url:
+    url: "https://download.docker.com/linux/centos/docker-ce.repo"
+    dest: '/etc/yum.repos.d/docker-ce.repo'
+
+- name: installing docker
+  yum:
+    name:
+      - docker-ce
+
+- name: ensure docker is running
+  service:
+    name: docker
+    state: started
+    enabled: yes
 ```
