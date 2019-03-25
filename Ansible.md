@@ -1057,6 +1057,21 @@ tasks/main.yml
     enabled: yes
 ```
 
+Кроме того, напишем на неё тест! В качестве теста запустим "docker run hello-world"
+
+molecule/default/tests/test_default.py
+```
+import os
+
+import testinfra.utils.ansible_runner
+
+testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
+    os.environ['MOLECULE_INVENTORY_FILE']).get_hosts('all')
+
+
+def test_docker_works(host):
+    assert host.run('docker run hello-world').rc == 0
+```
 
 Запускаем
 ```
