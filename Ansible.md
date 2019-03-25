@@ -86,7 +86,7 @@ Define and run a single task 'playbook' against a set of hosts
 ...
 ```
 
-3. Выйдем из машины и создадим еще одну виртуалку, которую будем настраивать через ansible.
+3. Откроем еще одну консоль и создадим еще одну виртуалку, которую будем настраивать через ansible.
 
 ```
 iMac-Aleksej:develop kurt$ mkdir ansible_slave
@@ -118,7 +118,23 @@ PING 10.2.0.11 (10.2.0.11) 56(84) bytes of data.
 64 bytes from 10.2.0.11: icmp_seq=1 ttl=64 time=0.643 ms
 ```
 
-5. Теперь попробуем осуществить ping всех машин, прописанных в inventory файле
+5. Создадим файл — список всех хостов, которые будут обслуживаться с помощью ansible.
+
+```
+[vagrant@st91 ~]$ mkdir ansible
+[vagrant@st91 ~]$ cd ansible/
+[vagrant@st91 ansible]$ vi inventory.yml
+```
+
+```
+all:
+  hosts:
+    ansible_slave:
+      ansible_host: 10.2.0.11
+```
+
+
+6. Теперь попробуем осуществить ping всех машин, прописанных в inventory файле
 
 ```
 [vagrant@localhost ansible]$ ansible -i inventory.yml all -m ping
@@ -131,7 +147,7 @@ ansible_slave | UNREACHABLE! => {
 
 Как мы видим, авторизация не удалась.
 
-6. Настроим авторизацию. Авторизация будет происходить по ssh-ключам. На машине с ansible нужно сгенерировать пару публичный-приватный ключи
+7. Настроим авторизацию. Авторизация будет происходить по ssh-ключам. На машине с ansible нужно сгенерировать пару публичный-приватный ключи
 
 ```
 [vagrant@localhost ansible]$ ssh-keygen
@@ -160,7 +176,7 @@ The key's randomart image is:
 Теперь публичный ключ (.ssh/id_rsa.pub) нужно положить на все машины, на которые нужно иметь доступ в файл .ssh/authorized_keys того же пользователя.
 Ходить будем пользователем vargrant, который уже есть в системе.
 
-7. На хост-машине в папке ansible_main сделаем следующее:
+8. На хост-машине в папке ansible_main сделаем следующее:
 
 ```
 iMac-Aleksej:ansible_main kurt$ vagrant ssh-config
@@ -224,7 +240,7 @@ ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDqH/+bq5vX+ao36WhfAyvqeDOr25fKRiqlw7PS5DLl
 [vagrant@localhost ~]$ cat id_rsa.pub >> .ssh/authorized_keys
 ```
 
-7. Проверяем с машины с ansible
+9. Проверяем с машины с ansible
 
 ```
 [vagrant@localhost ansible]$ ansible -i inventory.yml all -m ping
@@ -250,7 +266,7 @@ ansible_slave | CHANGED | rc=0 >>
 root
 ```
 
-8. Не хочется каждый раз прописывать файл с хостами и флаг --become (скорее всего настраивать машину будет от root). Поэтому заведем файл с конфигурацией:
+10. Не хочется каждый раз прописывать файл с хостами и флаг --become (скорее всего настраивать машину будет от root). Поэтому заведем файл с конфигурацией:
 ```
 [vagrant@localhost ansible]$ vi ansible.cfg
 ```
@@ -271,7 +287,7 @@ ansible_slave | CHANGED | rc=0 >>
 root
 ```
 
-9. Напишем playbook, который будет устанавливать docker на машину
+11. Напишем playbook, который будет устанавливать docker на машину
 
 ```
 [vagrant@localhost ansible]$ mkdir playbooks
@@ -376,3 +392,129 @@ ansible_slave              : ok=6    changed=0    unreachable=0    failed=0
 ```
 
 Как мы видим, в этот раз плейбук ничего не изменил. Потому что всё уже было на месте.
+
+## Тестирование ansible
+
+С помощью ansible мы реализовываем концепцию "Инфраструктура как код". Мы можем полностью описать всю конфигурацию сервисов на серверах в коде и плейбуках. Теперь, поскольку это код, то код же можно тестировать. Для тестирования ansible-скриптов используется фреймворк "Molecule"
+
+1. Тестирование происходит внутри docker, поэтому нам понадобится docker на машине с ansible. К счастью, у нас уже есть плейбука, которая его устанавливает. Осталось добавить в inventory локальный хост. Сделать это можно следующим образом:
+
+inventory.yml
+```
+all:
+  hosts:
+    ansible_slave:
+      ansible_host: 10.2.0.11
+    localhost:
+      ansible_connection: local
+      ansible_host: 127.0.0.1
+```
+
+2. Запускаем и устанавливаем
+
+```
+[vagrant@st91 ansible]$ ansible-playbook playbooks/setup_docker.yml
+```
+
+```
+[vagrant@st91 ansible]$ ansible-playbook playbooks/setup_docker.yml
+
+PLAY [all] ********************************************************************************************************************************************************************
+
+TASK [Gathering Facts] ********************************************************************************************************************************************************
+ok: [localhost]
+ok: [ansible_slave]
+
+TASK [installing dependencies] ************************************************************************************************************************************************
+ok: [ansible_slave]
+changed: [localhost]
+
+TASK [Add Docker GPG key] *****************************************************************************************************************************************************
+ok: [ansible_slave]
+changed: [localhost]
+
+TASK [Add Docker repository.] *************************************************************************************************************************************************
+ok: [ansible_slave]
+changed: [localhost]
+
+TASK [installing docker] ******************************************************************************************************************************************************
+ok: [ansible_slave]
+changed: [localhost]
+
+TASK [ensure docker is running] ***********************************************************************************************************************************************
+ok: [ansible_slave]
+changed: [localhost]
+
+PLAY RECAP ********************************************************************************************************************************************************************
+ansible_slave              : ok=6    changed=0    unreachable=0    failed=0
+localhost                  : ok=6    changed=5    unreachable=0    failed=0
+
+[vagrant@st91 ansible]$
+```
+
+Мы видим, что выполнение задач происходит последовательно, пока на каждом сервере не выполнится, следующая не запускается.
+
+3. Установим molecule с помощью роли ansible
+
+```
+[vagrant@st91 ansible]$ vi playbooks/setup_molecule.yml
+```
+
+```
+---
+- hosts: localhost
+  tasks:
+    - name: Add EPEL repository
+      yum:
+        name: epel-release
+
+    - name: Installing dependencies
+      yum:
+        name:
+          - gcc
+          - python-pip
+          - python-devel
+          - openssl-devel
+          - libselinux-python
+
+    - name: Upgrade pip
+      pip:
+        name:
+          - pip
+          - setuptools
+        extra_args: --upgrade
+
+    - name: Install molecule
+      pip:
+        name: molecule
+        extra_args:
+          --ignore-installed PyYAML
+```
+
+4. Запускаем
+
+```
+[vagrant@st91 ansible]$ ansible-playbook playbooks/setup_molecule.yml
+
+PLAY [localhost] **************************************************************************************************************************************************************
+
+TASK [Gathering Facts] ********************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Add EPEL repository] ****************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Installing dependencies] ************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Upgrade pip] ************************************************************************************************************************************************************
+ok: [localhost]
+
+TASK [Install molecule] *******************************************************************************************************************************************************
+changed: [localhost]
+
+PLAY RECAP ********************************************************************************************************************************************************************
+localhost                  : ok=5    changed=1    unreachable=0    failed=0
+```
+
+5. 
