@@ -564,14 +564,15 @@ verifier:
     name: flake8
 ```
 
-Поскольку мы собираемся устанавливать докер, получается, что он будет установлен внутри докер-контейнера, поэтому нам потребуется привелигированный режим. Допишем
+Поскольку мы собираемся устанавливать докер, получается, что он будет установлен внутри докер-контейнера, поэтому нам потребуется привелигированный режим. К тому же, мы будем устанавливать и включать службу, поэтому понадобится systemd.
 
 [vagrant@st91 docker]$ vi molecule/default/molecule.yml
 ```
 platforms:
   - name: instance
-    image: centos:7
+    image: centos/systemd:latest
     privileged: true
+    command: /sbin/init
 ```
 
 7. Попробуем поднять среду для тестов
@@ -1055,3 +1056,174 @@ tasks/main.yml
     state: started
     enabled: yes
 ```
+
+
+Запускаем
+```
+[vagrant@st91 docker]$ molecule test
+--> Validating schema /home/vagrant/ansible/roles/docker/molecule/default/molecule.yml.
+Validation completed successfully.
+--> Test matrix
+
+└── default
+    ├── lint
+    ├── cleanup
+    ├── destroy
+    ├── dependency
+    ├── syntax
+    ├── create
+    ├── prepare
+    ├── converge
+    ├── idempotence
+    ├── side_effect
+    ├── verify
+    ├── cleanup
+    └── destroy
+
+--> Scenario: 'default'
+--> Action: 'lint'
+--> Executing Yamllint on files found in /home/vagrant/ansible/roles/docker/...
+Lint completed successfully.
+--> Executing Flake8 on files found in /home/vagrant/ansible/roles/docker/molecule/default/tests/...
+Lint completed successfully.
+--> Executing Ansible Lint on /home/vagrant/ansible/roles/docker/molecule/default/playbook.yml...
+Lint completed successfully.
+--> Scenario: 'default'
+--> Action: 'cleanup'
+Skipping, cleanup playbook not configured.
+--> Scenario: 'default'
+--> Action: 'destroy'
+
+    PLAY [Destroy] *****************************************************************
+
+    TASK [Destroy molecule instance(s)] ********************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Wait for instance(s) deletion to complete] *******************************
+    ok: [localhost] => (item=None)
+    ok: [localhost]
+
+    TASK [Delete docker network(s)] ************************************************
+
+    PLAY RECAP *********************************************************************
+    localhost                  : ok=2    changed=1    unreachable=0    failed=0
+
+
+--> Scenario: 'default'
+--> Action: 'dependency'
+Skipping, missing the requirements file.
+--> Scenario: 'default'
+--> Action: 'syntax'
+
+    playbook: /home/vagrant/ansible/roles/docker/molecule/default/playbook.yml
+
+--> Scenario: 'default'
+--> Action: 'create'
+
+    PLAY [Create] ******************************************************************
+
+    TASK [Log into a Docker registry] **********************************************
+    skipping: [localhost] => (item=None)
+
+    TASK [Create Dockerfiles from image names] *************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Discover local Docker images] ********************************************
+    ok: [localhost] => (item=None)
+    ok: [localhost]
+
+    TASK [Build an Ansible compatible image] ***************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Create docker network(s)] ************************************************
+
+    TASK [Determine the CMD directives] ********************************************
+    ok: [localhost] => (item=None)
+    ok: [localhost]
+
+    TASK [Create molecule instance(s)] *********************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Wait for instance(s) creation to complete] *******************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    PLAY RECAP *********************************************************************
+    localhost                  : ok=6    changed=4    unreachable=0    failed=0
+
+
+--> Scenario: 'default'
+--> Action: 'prepare'
+Skipping, prepare playbook not configured.
+--> Scenario: 'default'
+--> Action: 'converge'
+
+    PLAY [Converge] ****************************************************************
+
+    TASK [Gathering Facts] *********************************************************
+    ok: [instance]
+
+    TASK [docker : installing dependencies] ****************************************
+    changed: [instance]
+
+    TASK [docker : Add Docker GPG key] *********************************************
+    changed: [instance]
+
+    TASK [docker : Add Docker repository.] *****************************************
+    changed: [instance]
+
+    TASK [docker : installing docker] **********************************************
+    changed: [instance]
+
+    TASK [docker : ensure docker is running] ***************************************
+    changed: [instance]
+
+    PLAY RECAP *********************************************************************
+    instance                   : ok=6    changed=5    unreachable=0    failed=0
+
+
+--> Scenario: 'default'
+--> Action: 'idempotence'
+Idempotence completed successfully.
+--> Scenario: 'default'
+--> Action: 'side_effect'
+Skipping, side effect playbook not configured.
+--> Scenario: 'default'
+--> Action: 'verify'
+--> Executing Testinfra tests found in /home/vagrant/ansible/roles/docker/molecule/default/tests/...
+    ============================= test session starts ==============================
+    platform linux2 -- Python 2.7.5, pytest-4.3.1, py-1.8.0, pluggy-0.9.0
+    rootdir: /home/vagrant/ansible/roles/docker/molecule/default, inifile:
+    plugins: testinfra-1.19.0
+collected 1 item
+
+    tests/test_default.py .                                                  [100%]
+
+    ========================== 1 passed in 16.68 seconds ===========================
+Verifier completed successfully.
+--> Scenario: 'default'
+--> Action: 'cleanup'
+Skipping, cleanup playbook not configured.
+--> Scenario: 'default'
+--> Action: 'destroy'
+
+    PLAY [Destroy] *****************************************************************
+
+    TASK [Destroy molecule instance(s)] ********************************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Wait for instance(s) deletion to complete] *******************************
+    changed: [localhost] => (item=None)
+    changed: [localhost]
+
+    TASK [Delete docker network(s)] ************************************************
+
+    PLAY RECAP *********************************************************************
+    localhost                  : ok=2    changed=2    unreachable=0    failed=0
+```
+Всё прошло
