@@ -517,4 +517,58 @@ PLAY RECAP *********************************************************************
 localhost                  : ok=5    changed=1    unreachable=0    failed=0
 ```
 
-5. 
+5. Помимо тестирования, молекула помогает организовать код в виде "ролей". "Роль" — законченный набор инструкций по установке/настройке какого-то одного сервиса. Роли можно наследовать друг от друга. В итоговом playbook будет описан просто набор нужных ролей. Молекула тестирует каждую роль в отдельности. Организуем роль по установке докера с помощью molecule.
+
+```
+[vagrant@st91 ansible]$ mkdir roles
+[vagrant@st91 ansible]$ cd roles
+[vagrant@st91 roles]$ molecule init role -r docker
+--> Initializing new role docker...
+Initialized role in /home/vagrant/ansible/roles/docker successfully.
+[vagrant@st91 roles]$ ls -lh docker/
+total 4,0K
+drwxrwxr-x. 2 vagrant vagrant   22 мар 25 08:56 defaults
+drwxrwxr-x. 2 vagrant vagrant   22 мар 25 08:56 handlers
+drwxrwxr-x. 2 vagrant vagrant   22 мар 25 08:56 meta
+drwxrwxr-x. 3 vagrant vagrant   21 мар 25 08:56 molecule
+-rw-r--r--. 1 vagrant vagrant 1,3K мар 25 08:56 README.md
+drwxrwxr-x. 2 vagrant vagrant   22 мар 25 08:56 tasks
+drwxrwxr-x. 2 vagrant vagrant   22 мар 25 08:56 vars
+```
+
+Описание того, за что отвечает каждая папка, можно найти в официальной документации по ansible: https://docs.ansible.com/ansible/latest/user_guide/playbooks_reuse_roles.html
+
+6. Посмотрим на файл с настройками молекулы. Для тестирования она будет поднимать docker-контейнер и в нем выполнять инструкции, описанные в роли. Dockerfile она генерирует самостоятельно, мы же можем управлять настройками, по которым она это будет делать.
+
+```
+[vagrant@st91 roles]$ cd docker/
+[vagrant@st91 docker]$ cat molecule/default/molecule.yml
+---
+dependency:
+  name: galaxy
+driver:
+  name: docker
+lint:
+  name: yamllint
+platforms:
+  - name: instance
+    image: centos:7
+provisioner:
+  name: ansible
+  lint:
+    name: ansible-lint
+verifier:
+  name: testinfra
+  lint:
+    name: flake8
+```
+
+Поскольку мы собираемся устанавливать докер, получается, что он будет установлен внутри докер-контейнера, поэтому нам потребуется привелигированный режим. Допишем
+
+[vagrant@st91 docker]$ vi molecule/default/molecule.yml
+```
+platforms:
+  - name: instance
+    image: centos:7
+    privileged: true
+```
