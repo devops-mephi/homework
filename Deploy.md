@@ -561,3 +561,39 @@ changed: [ansible_slave]
 PLAY RECAP *****************************************************************************************************
 ansible_slave              : ok=3    changed=3    unreachable=0    failed=0  
 ```
+
+7. Теперь должно сработать
+```
+[vagrant@localhost ansible]$ ansible-playbook playbooks/deploy_banners.yml  --vault-id ansible_secret 
+
+PLAY [ansible_slave] ********************************************************************************************************************
+
+TASK [Gathering Facts] ******************************************************************************************************************
+ok: [ansible_slave]
+
+TASK [Create banners container] *********************************************************************************************************
+changed: [ansible_slave]
+
+PLAY RECAP ******************************************************************************************************************************
+ansible_slave              : ok=2    changed=1    unreachable=0    failed=0   
+```
+
+8. Зайдем на машину ansible_slave и убедимся:
+
+```
+[vagrant@localhost ~]$ sudo docker ps
+CONTAINER ID        IMAGE                        COMMAND                  CREATED             STATUS              PORTS                    NAMES
+f80d19621926        devopsmephi/banners:latest   "/bin/sh -c 'python …"   14 minutes ago      Up 14 minutes       0.0.0.0:8000->8000/tcp   banners_web
+```
+
+9. Можно попробовать открыть в браузере
+
+```
+http://10.2.0.11:8000
+```
+
+Ответом будет
+```
+DisallowedHost at /
+Invalid HTTP_HOST header: '10.2.0.11:8000'. You may need to add '10.2.0.11' to ALLOWED_HOSTS.
+```
