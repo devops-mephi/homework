@@ -142,4 +142,169 @@ latest: digest: sha256:2ee907f50abedadb8a5e5975eebd265d2ad8fb1c5ff604ca333e876bd
 Job succeeded
 ```
 
-Как мы видим, сборка успешно запушила образ с тегом 
+Как мы видим, сборка успешно запушила образ с тегом 1fbc7d97 и latest
+
+## Установка mysql на конечную машину
+
+Будем деплоить сервис на машину ansible_slave, созданную на прошлом занятии.
+1. Погасим машину с gitlab ci, чтобы не отнимала ресурсы.
+Добавим памяти машине ansible_slave в Vagrantfile
+
+```
+Vagrant.configure("2") do |config|
+  config.vm.box = "centos/7"
+  config.vm.network "private_network", ip: "10.2.0.11"
+  config.vm.provider "virtualbox" do |v|
+    v.memory = 512
+    v.cpus = 1
+  end
+end
+```
+
+2. Запустим, зайдем на машину ansible_main и создадим новую роль для установки mysql
+
+```
+---
+- hosts: ansible_slave
+  tasks:
+    - name: checking if MySQL Repo exists
+      stat:
+        path: /etc/yum.repos.d/mysql-community.repo
+      register: mysql_repo_exists
+
+    - name: Download MySQL Repo
+      get_url:
+        url: https://dev.mysql.com/get/mysql57-community-release-el7-9.noarch.rpm
+        dest: /tmp
+      when: mysql_repo_exists.stat.exists == false
+
+    - name: Install MySQL Repo
+      command: rpm -ivh /tmp/mysql57-community-release-el7-9.noarch.rpm
+      when: mysql_repo_exists.stat.exists == false
+
+    - name: Install MySQL
+      yum:
+        name:
+          - mysql-server
+
+    - name: Ensure MySQL is started and enabled
+      service:
+        name: mysqld
+        enabled: yes
+        state: started
+```
+
+Запустим
+```
+[vagrant@localhost ansible]$ ansible-playbook playbooks/setup_mysql.yml 
+
+PLAY [ansible_slave] ***************************************************************************************
+
+TASK [Gathering Facts] *************************************************************************************
+ok: [ansible_slave]
+
+TASK [Download MySQL Repo] *********************************************************************************
+ok: [ansible_slave]
+
+TASK [Install MySQL Repo] **********************************************************************************
+ [WARNING]: Consider using the yum, dnf or zypper module rather than running 'rpm'.  If you need to use
+command because yum, dnf or zypper is insufficient you can add 'warn: false' to this command task or set
+'command_warnings=False' in ansible.cfg to get rid of this message.
+
+changed: [ansible_slave]
+
+TASK [Install MySQL] ***************************************************************************************
+changed: [ansible_slave]
+
+TASK [Ensure MySQL is started and enabled] *****************************************************************
+changed: [ansible_slave]
+
+PLAY RECAP *************************************************************************************************
+ansible_slave              : ok=4    changed=1    unreachable=0    failed=0 
+```
+
+3. Теперь зайдем на машину ansible_slave и продолжим установку руками.
+
+Во-первых нужно узнать какой пароль root пользователю был выставлен при установке.
+Временный пароль был написан в логе, найдем его
+```
+[vagrant@localhost ~]$ sudo grep 'temporary password' /var/log/mysqld.log
+2019-03-31T16:45:41.966295Z 1 [Note] A temporary password is generated for root@localhost: uwOb2<YXMi3X
+```
+
+4. Далее запустим скрипт, который "засекьюрит" инсталляцию mysql (запретит логин root-пользователя извне, логин анонимных пользователей, удалит тестовую БД)
+
+```
+sudo mysql_secure_installation
+```
+
+```
+[vagrant@localhost ~]$ sudo mysql_secure_installation
+
+Securing the MySQL server deployment.
+
+Enter password for user root: 
+
+The existing password for the user account root has expired. Please set a new password.
+
+New password: 
+
+Re-enter new password: 
+ ... Failed! Error: Your password does not satisfy the current policy requirements
+
+New password: 
+
+Re-enter new password: 
+The 'validate_password' plugin is installed on the server.
+The subsequent steps will run with the existing configuration
+of the plugin.
+Using existing password for root.
+
+Estimated strength of the password: 100 
+Change the password for root ? ((Press y|Y for Yes, any other key for No) : y
+
+New password: 
+
+Re-enter new password: 
+
+Estimated strength of the password: 100 
+Do you wish to continue with the password provided?(Press y|Y for Yes, any other key for No) : y
+By default, a MySQL installation has an anonymous user,
+allowing anyone to log into MySQL without having to have
+a user account created for them. This is intended only for
+testing, and to make the installation go a bit smoother.
+You should remove them before moving into a production
+environment.
+
+Remove anonymous users? (Press y|Y for Yes, any other key for No) : y
+Success.
+
+
+Normally, root should only be allowed to connect from
+'localhost'. This ensures that someone cannot guess at
+the root password from the network.
+
+Disallow root login remotely? (Press y|Y for Yes, any other key for No) : y
+Success.
+
+By default, MySQL comes with a database named 'test' that
+anyone can access. This is also intended only for testing,
+and should be removed before moving into a production
+environment.
+
+
+Remove test database and access to it? (Press y|Y for Yes, any other key for No) : y
+ - Dropping test database...
+Success.
+
+ - Removing privileges on test database...
+Success.
+
+Reloading the privilege tables will ensure that all changes
+made so far will take effect immediately.
+
+Reload privilege tables now? (Press y|Y for Yes, any other key for No) : y
+Success.
+
+All done! 
+```
