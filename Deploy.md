@@ -421,3 +421,143 @@ mysql> show tables;
 
 ```
 
+## Простая ansible-плейбука для деплоя контейнера
+
+1. Напишем простую ansible playbook для деплоя приложения banners на машину.
+
+```
+vi playbooks/deploy_banners.yml
+```
+
+```
+---
+- hosts: ansible_slave
+  tasks:
+    - name: Create banners container
+      docker_container:
+        name: banners_web
+        image: devopsmephi/banners:latest
+        recreate: yes
+        ports:
+          - "8000:8000"
+        env:
+          BANNERS_DATABASE_HOST: 10.2.0.11
+          BANNERS_DATABASE_PASSWORD: Developerpa$sw0rd
+```
+
+так-так-так! Что за продакшен-пароли в файле, который мы собираемся положить в репозиторий. Нельзя так.
+
+Нам поможет ansible-vault!
+
+2. Создадим файл с секретным содержанием (паролем каким-нибудь)
+
+```
+vi ansible_secret
+```
+
+Далее нужно СРАЗУ ЖЕ добавить этот файл в .gitignore, иначе его можно случайно закоммитить.
+
+3. Закодируем пароль этим сикретом, вот так:
+
+```
+[vagrant@localhost ansible]$ ansible-vault encrypt_string --vault-id ansible_secret --name 'mysql_password' 'Developerpa$sw0rd'
+mysql_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          33623463356665393366626664353366323335353466303439646433663466633137363137626161
+          3339633038613565303838666536633766313637343033310a326330666533323030353535666362
+          32653764353261633866333463393735633431346166633966336436323962623830323433623239
+          6635646636643631380a323566333361353536323834643166373366626466633739386438343739
+          30323561373462356232643036396665633136346239343334383537363832313831
+Encryption successful
+```
+
+4. Теперь выданное нужно добавить в нашу плейбуку. НО! Добавлять нужно не в то место, где мы используем эту переменную, а чуть хитрее. Нужно добавить это в блок vars задачи, в которой это нужно. А в месте, где нам эта переменная нужна, использовать уже внутреннюю переменную, объявленную в vars. 
+
+```
+---
+- hosts: ansible_slave
+  tasks:
+    - name: Create banners container
+      vars:
+        mysql_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          33623937653737383337396338313830636361393736343161316466303534303161313736353539
+          3730303763633435363366663630363066343963393964660a646463333665343839303932643764
+          32646134303833383730323633636666633538613663343763373963333532313266373538623563
+          6537376631316232350a653561343264613736626536366635383264353339323837616265653737
+          33613762326531666130626463623130363032613162656331323335343464353034
+      docker_container:
+        name: banners_web
+        image: devopsmephi/banners:latest
+        recreate: yes
+        ports:
+          - "8000:8000"
+        env:
+          BANNERS_DATABASE_HOST: 10.2.0.11
+          BANNERS_DATABASE_PASSWORD: "{{ mysql_password }}"
+```
+
+Главное не потерять файл с сикретом.
+
+5. При запуске нужно передать в ansible-playbook файл с сикретом точно также, как передавали при зашифровке.
+
+```
+ansible-playbook playbooks/deploy_banners.yml  --vault-id ansible_secret
+```
+
+```
+
+PLAY [ansible_slave] *******************************************************************************************
+
+TASK [Gathering Facts] *****************************************************************************************
+ok: [ansible_slave]
+
+TASK [Create banners container] ********************************************************************************
+fatal: [ansible_slave]: FAILED! => {"changed": false, "msg": "Failed to import docker or docker-py - No module named requests.exceptions. Try `pip install docker` or `pip install docker-py` (Python 2.6)"}
+	to retry, use: --limit @/home/vagrant/ansible/playbooks/deploy_banners.retry
+
+PLAY RECAP *****************************************************************************************************
+ansible_slave              : ok=1    changed=0    unreachable=0    failed=1  
+```
+
+Нужно доставить на машину ansible-slave python-docker.
+
+6. Напишем простенькую плейбуку:
+
+```
+vi playbooks/setup_python_docker.yml
+```
+
+```
+---
+- hosts: ansible_slave
+  tasks:
+    - name: Add EPEL repository
+      yum:
+        name: epel-release
+
+    - name: Installing pip
+      yum:
+        name:
+          - python-pip
+
+    - name: Install python-docker
+      pip:
+        name:
+          - docker
+```
+
+```
+[vagrant@localhost ansible]$ ansible-playbook playbooks/setup_python_docker.yml
+TASK [Add EPEL repository] *************************************************************************************
+changed: [ansible_slave]
+
+TASK [Installing pip] ******************************************************************************************
+changed: [ansible_slave]
+
+TASK [Install python-docker] ***********************************************************************************
+changed: [ansible_slave]
+
+PLAY RECAP *****************************************************************************************************
+ansible_slave              : ok=3    changed=3    unreachable=0    failed=0  
+```
