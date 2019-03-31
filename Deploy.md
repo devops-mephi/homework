@@ -308,3 +308,116 @@ Success.
 
 All done! 
 ```
+
+5. Теперь выполним первоначальную настройку БД.
+
+Нам нужно:
+создать новую бд mephi
+создать нового пользователя developer с правами на бд mephi
+создать таблицы и наполнить их из init.sql файла
+
+Для начала скачаем init.sql в текущую папку
+
+```
+[vagrant@localhost ~]$ wget https://raw.githubusercontent.com/devops-mephi/banners/master/db/init.sql
+--2019-03-31 17:04:27--  https://raw.githubusercontent.com/devops-mephi/banners/master/db/init.sql
+Resolving raw.githubusercontent.com (raw.githubusercontent.com)... 151.101.84.133
+Connecting to raw.githubusercontent.com (raw.githubusercontent.com)|151.101.84.133|:443... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 13812 (13K) [text/plain]
+Saving to: 'init.sql'
+
+100%[==================================================================>] 13,812      --.-K/s   in 0.02s   
+
+2019-03-31 17:04:27 (610 KB/s) - 'init.sql' saved [13812/13812]
+```
+
+Теперь запустим консоль к mysql используя установленный выше пароль root
+```
+[vagrant@localhost ~]$ mysql -uroot -p 
+Enter password: 
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 10
+Server version: 5.7.25 MySQL Community Server (GPL)
+
+Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql>
+```
+
+6. Создаем БД
+
+```
+mysql> create database mephi;
+Query OK, 1 row affected (0.00 sec)
+```
+
+7. Создаем пользователя developer с паролем и доступом к бд mephi
+
+```
+mysql> create user 'developer'@'localhost' identified by 'Developerpa$sw0rd';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> grant all privileges on mephi.* to 'developer'@'localhost';
+Query OK, 0 rows affected (0.00 sec)
+```
+
+8. Наполняем бд mephi
+
+```
+mysql> use mephi
+Database changed
+mysql> source init.sql
+Query OK, 0 rows affected (0.00 sec)
+
+Query OK, 0 rows affected (0.00 sec)
+
+.....
+
+```
+
+9. Пробуем подключиться как developer
+
+```
+[vagrant@localhost ~]$ mysql -udeveloper -p mephi
+Enter password: 
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 17
+Server version: 5.7.25 MySQL Community Server (GPL)
+
+Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql> show tables;
++----------------------------+
+| Tables_in_mephi            |
++----------------------------+
+| auth_group                 |
+| auth_group_permissions     |
+| auth_permission            |
+| auth_user                  |
+| auth_user_groups           |
+| auth_user_user_permissions |
+| django_admin_log           |
+| django_content_type        |
+| django_migrations          |
+| django_session             |
++----------------------------+
+10 rows in set (0.00 sec)
+
+```
+
