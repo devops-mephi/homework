@@ -17,3 +17,7 @@
 * [Протокол занятия 5 (ansible)](Ansible.md)
 
 * [Задание номер 5 (admin-keys)](Homework5.md)
+
+* [Протокол занятия 6 (ansible)](Deploy.md)
+
+* [Задание номер 6 (admin-keys)](Homework6.md)
