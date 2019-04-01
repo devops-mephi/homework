@@ -887,3 +887,85 @@ ansible_slave              : ok=3    changed=1    unreachable=0    failed=0
 http://10.2.0.11:8000
 
 По http://10.2.0.11:8000/admin можно залогиниться в админку.
+
+## Добавляем nginx в стек
+
+Смотрящий прямо наружу веб-сервер это нехорошо. Одна из причин: "проблема медленных коннектов".
+
+Добавим nginx
+
+1. Конфиг nginx будет очень простым, просто пробрасывать запросы в контейнер с django
+
+```
+[vagrant@st91 ansible]$ vi roles/banners/templates/nginx.conf.j2
+```
+
+```
+server {
+    listen          80;
+    location / {
+        proxy_set_header Host $http_host;
+        proxy_pass  http://banners_web:8000/;
+    }
+}
+```
+
+2. Допишем таск, с конфигом nginx, внутренней сетью для двух контейнеров nginx и banners_web.
+
+```
+---
+
+- name: Update local.py file
+  template:
+    src: local.py.j2
+    dest: "/etc/banners.conf.py"
+    force: yes
+
+- name: Update nginx.conf file
+  template:
+    src: nginx.conf.j2
+    dest: "/etc/nginx.conf.py"
+    force: yes
+
+- name: Create a network
+  docker_network:
+    name: network_docker
+
+- name: Create banners container
+  docker_container:
+    name: banners_web
+    image: devopsmephi/banners:latest
+    pull: yes
+    recreate: yes
+    networks:
+      - name: network_docker
+        aliases:
+        - "banners_web"
+    volumes:
+      - "/etc/banners.conf.py:/code/banners/local_settings.py"
+
+- name: Create nginx container
+  docker_container:
+    name: nginx
+    image: nginx:latest
+    recreate: yes
+    networks:
+      - name: network_docker
+        aliases:
+        - "nginx"
+    ports:
+      - "80:80"
+    volumes:
+      - "/etc/nginx.conf.py:/etc/nginx/conf.d/default.conf"
+```
+Заметьте, что открывать наружу порт 8000 нам уже не нужно, наружу будет смотреть только nginx
+
+3. Запускаем и смотрим, что проект отдается по порту 80
+
+```
+[vagrant@st91 ansible]$ ansible-playbook playbooks/deploy_banners.yml  --vault-id ansible_secret
+....
+```
+
+http://10.2.0.11
+
