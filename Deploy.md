@@ -969,3 +969,31 @@ server {
 
 http://10.2.0.11
 
+
+4. Теперь выключаем DEBUG режим
+
+```
+vi roles/banners/templates/local.py.j2
+```
+
+```
+ALLOWED_HOSTS = ['10.2.0.11']
+
+DEBUG = False
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': "{{ mysql_database_name }}",
+        'USER':  "{{ mysql_user }}",
+        'PASSWORD': "{{ mysql_password }}",
+        'HOST': "{{ mysql_host }}",
+        'PORT': "{{ mysql_port }}",
+    }
+}
+```
+
+5. После деплоя видим, что
+
+1) красивая страница ушла, теперь вместо неё 404
+2) админка /admin/ работает, но статики нет.
