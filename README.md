@@ -18,6 +18,6 @@
 
 * [Задание номер 5 (admin-keys)](Homework5.md)
 
-* [Протокол занятия 6 (ansible)](Deploy.md)
+* [Протокол занятия 6 (deploy)](Deploy.md)
 
 * [Задание номер 6 (admin-keys)](Homework6.md)
