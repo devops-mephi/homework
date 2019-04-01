@@ -717,3 +717,115 @@ mysql_password: !vault |
     volumes:
       - "/etc/banners.conf.py:/code/banners/local.py"
 ```
+
+14. Теперь меняем плейбуку, чтобы она просто запускала роль banners
+
+```
+[vagrant@st91 ansible]$ vi playbooks/deploy_banners.yml
+```
+
+```
+---
+- hosts: ansible_slave
+  roles:
+    - banners
+```
+
+15. Запускаем!
+
+```
+[vagrant@st91 ansible]$ ansible-playbook playbooks/deploy_banners.yml  --vault-id ansible_secret
+ERROR! the role 'banners' was not found in /home/vagrant/ansible/playbooks/roles:/home/vagrant/.ansible/roles:/usr/share/ansible/roles:/etc/ansible/roles:/home/vagrant/ansible/playbooks
+
+The error appears to have been in '/home/vagrant/ansible/playbooks/deploy_banners.yml': line 4, column 7, but may
+be elsewhere in the file depending on the exact syntax problem.
+
+The offending line appears to be:
+
+  roles:
+    - banners
+      ^ here
+```
+
+Видим, что по умолчанию ansible ищет роли там, где их у нас нет.
+
+16. К счастью, есть опция roles_path в конфиге ansible, которая нам поможет. Допишем её в блок defaults
+
+
+```
+[vagrant@st91 ansible]$ vi ansible.cfg
+```
+
+```
+[defaults]
+inventory=inventory.yml
+roles_path=roles/
+
+[privilege_escalation]
+become=True
+```
+
+17. И!
+
+```
+[vagrant@st91 ansible]$ ansible-playbook playbooks/deploy_banners.yml  --vault-id ansible_secret
+
+PLAY [ansible_slave] *******************************************************************************************************************************************************
+
+TASK [Gathering Facts] *****************************************************************************************************************************************************
+ok: [ansible_slave]
+
+TASK [banners : Update local.py file] **************************************************************************************************************************************
+changed: [ansible_slave]
+
+TASK [banners : Create banners container] **********************************************************************************************************************************
+changed: [ansible_slave]
+
+PLAY RECAP *****************************************************************************************************************************************************************
+ansible_slave              : ok=3    changed=2    unreachable=0    failed=0
+```
+
+18. Проверяем, что всё получилось:
+
+```
+[vagrant@st91 ~]$ cat /etc/banners.conf.py
+ALLOWED_HOSTS = ['10.2.0.11']
+
+DEBUG = False
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': "mephi",
+        'USER':  "developer",
+        'PASSWORD': "Developerpa$sw0rd",
+        'HOST': "10.2.0.11",
+        'PORT': "3306",
+    }
+}
+```
+Файлик есть.
+
+Осталось убедиться, что он есть в контейнере.
+
+```
+[vagrant@st91 ~]$ sudo docker exec -ti banners_web bash
+root@c175860411c1:/code# cat banners/local.py
+ALLOWED_HOSTS = ['10.2.0.11']
+
+DEBUG = False
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': "mephi",
+        'USER':  "developer",
+        'PASSWORD': "Developerpa$sw0rd",
+        'HOST': "10.2.0.11",
+        'PORT': "3306",
+    }
+}
+root@c175860411c1:/code# exit
+[vagrant@st91 ~]$
+```
+
