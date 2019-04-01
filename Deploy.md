@@ -164,6 +164,11 @@ end
 2. Запустим, зайдем на машину ansible_main и создадим новую роль для установки mysql
 
 ```
+[vagrant@st91 ~]$ cd ansible/
+[vagrant@st91 ansible]$ vi playbooks/setup_mysql.yml
+```
+
+```
 ---
 - hosts: ansible_slave
   tasks:
@@ -196,31 +201,33 @@ end
 
 Запустим
 ```
-[vagrant@localhost ansible]$ ansible-playbook playbooks/setup_mysql.yml 
+[vagrant@st91 ansible]$ ansible-playbook playbooks/setup_mysql.yml
 
-PLAY [ansible_slave] ***************************************************************************************
+PLAY [ansible_slave] *******************************************************************************************************************************************************
 
-TASK [Gathering Facts] *************************************************************************************
+TASK [Gathering Facts] *****************************************************************************************************************************************************
 ok: [ansible_slave]
 
-TASK [Download MySQL Repo] *********************************************************************************
+TASK [checking if MySQL Repo exists] ***************************************************************************************************************************************
 ok: [ansible_slave]
 
-TASK [Install MySQL Repo] **********************************************************************************
- [WARNING]: Consider using the yum, dnf or zypper module rather than running 'rpm'.  If you need to use
-command because yum, dnf or zypper is insufficient you can add 'warn: false' to this command task or set
-'command_warnings=False' in ansible.cfg to get rid of this message.
+TASK [Download MySQL Repo] *************************************************************************************************************************************************
+changed: [ansible_slave]
+
+TASK [Install MySQL Repo] **************************************************************************************************************************************************
+ [WARNING]: Consider using the yum, dnf or zypper module rather than running 'rpm'.  If you need to use command because yum, dnf or zypper is insufficient you can add
+'warn: false' to this command task or set 'command_warnings=False' in ansible.cfg to get rid of this message.
 
 changed: [ansible_slave]
 
-TASK [Install MySQL] ***************************************************************************************
+TASK [Install MySQL] *******************************************************************************************************************************************************
 changed: [ansible_slave]
 
-TASK [Ensure MySQL is started and enabled] *****************************************************************
+TASK [Ensure MySQL is started and enabled] *********************************************************************************************************************************
 changed: [ansible_slave]
 
-PLAY RECAP *************************************************************************************************
-ansible_slave              : ok=4    changed=1    unreachable=0    failed=0 
+PLAY RECAP *****************************************************************************************************************************************************************
+ansible_slave              : ok=6    changed=4    unreachable=0    failed=0
 ```
 
 3. Теперь зайдем на машину ansible_slave и продолжим установку руками.
@@ -361,10 +368,13 @@ Query OK, 1 row affected (0.00 sec)
 7. Создаем пользователя developer с паролем и доступом к бд mephi
 
 ```
-mysql> create user 'developer'@'localhost' identified by 'Developerpa$sw0rd';
+mysql> create user 'developer'@'%'  identified by 'Developerpa$sw0rd';
 Query OK, 0 rows affected (0.00 sec)
 
-mysql> grant all privileges on mephi.* to 'developer'@'localhost';
+mysql> grant all privileges on mephi.* to 'developer'@'%';
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> flush privileges;
 Query OK, 0 rows affected (0.00 sec)
 ```
 
@@ -548,18 +558,24 @@ vi playbooks/setup_python_docker.yml
 ```
 
 ```
-[vagrant@localhost ansible]$ ansible-playbook playbooks/setup_python_docker.yml
-TASK [Add EPEL repository] *************************************************************************************
+[vagrant@st91 ansible]$ ansible-playbook playbooks/setup_python_docker.yml
+
+PLAY [ansible_slave] *******************************************************************************************************************************************************
+
+TASK [Gathering Facts] *****************************************************************************************************************************************************
+ok: [ansible_slave]
+
+TASK [Add EPEL repository] *************************************************************************************************************************************************
 changed: [ansible_slave]
 
-TASK [Installing pip] ******************************************************************************************
+TASK [Installing pip] ******************************************************************************************************************************************************
 changed: [ansible_slave]
 
-TASK [Install python-docker] ***********************************************************************************
+TASK [Install python-docker] ***********************************************************************************************************************************************
 changed: [ansible_slave]
 
-PLAY RECAP *****************************************************************************************************
-ansible_slave              : ok=3    changed=3    unreachable=0    failed=0  
+PLAY RECAP *****************************************************************************************************************************************************************
+ansible_slave              : ok=4    changed=3    unreachable=0    failed=0 
 ```
 
 7. Теперь должно сработать
@@ -596,4 +612,108 @@ http://10.2.0.11:8000
 ```
 DisallowedHost at /
 Invalid HTTP_HOST header: '10.2.0.11:8000'. You may need to add '10.2.0.11' to ALLOWED_HOSTS.
+```
+
+Что произошло: в настройках banners/settings.py прописана переменная:
+```
+ALLOWED_HOSTS = []
+```
+Которая задает список хостов, передаваемых в HTTP запрсое, по которым она будет откликаться. В нашем случае туда нужно добавить 10.2.0.11.
+Можно завести еще одну ENV-переменную, но их накопилось уже достаточно много, плюс не хочется каждый раз менять код banners ради переопределения каждой новой переменной на продакшене.
+Поэтому на этот раз мы пойдем другим путем: создадим файл настроек local.py, куда будем вносить переопределенные настройки.
+
+10. Преобразуем нашу плейбуку в роль banners.
+
+```
+[vagrant@st91 ansible]$ mkdir roles/banners
+[vagrant@st91 ansible]$ cd roles/banners/
+```
+
+Нам понадобятся папки
+
+```
+[vagrant@st91 banners]$ mkdir templates
+```
+Здесь мы будем хранить шаблоны файлов (local.py)
+
+```
+[vagrant@st91 banners]$ mkdir vars
+```
+Здесь будут настройки, которые мы будем использовать в роли
+
+```
+[vagrant@st91 banners]$ mkdir tasks
+```
+Здесь будет непосредственно задача
+
+
+11. Создадим шаблон
+
+```
+[vagrant@st91 banners]$ vi templates/local.py.j2
+```
+
+```
+ALLOWED_HOSTS = ['10.2.0.11']
+
+DEBUG = False
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': "{{ mysql_database_name }}",
+        'USER':  "{{ mysql_user }}",
+        'PASSWORD': "{{ mysql_password }}",
+        'HOST': "{{ mysql_host }}",
+        'PORT': "{{ mysql_port }}",
+    }
+}
+```
+
+12. Список переменных
+
+```
+[vagrant@st91 banners]$ vi vars/main.yml
+```
+
+```
+---
+
+mysql_database_name: mephi
+mysql_host: 10.2.0.11
+mysql_port: 3306
+mysql_user: developer
+mysql_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          39666565333235366530306663333065626436616138643534306334383338336433623837656233
+          3136386230346136393832666662613138346130396461350a306433613636623538663361363162
+          66336661376431666638376535653534616234653463633838633162613166613562313833636635
+          3638663366333265350a623135303563316163653261613133323633336563396237633563373038
+          39343738353463663335376235343866386361353932643131316335633934623964
+```
+
+13. А теперь непосредственно задачу
+
+```
+[vagrant@st91 banners]$ vi tasks/main.yml
+```
+
+```
+---
+
+- name: Update local.py file
+  template:
+    src: local.py.j2
+    dest: "/etc/banners.conf.py"
+    force: yes
+
+- name: Create banners container
+  docker_container:
+    name: banners_web
+    image: devopsmephi/banners:latest
+    recreate: yes
+    ports:
+      - "8000:8000"
+    volumes:
+      - "/etc/banners.conf.py:/code/banners/local.py"
 ```
