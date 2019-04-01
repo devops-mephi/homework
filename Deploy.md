@@ -715,7 +715,7 @@ mysql_password: !vault |
     ports:
       - "8000:8000"
     volumes:
-      - "/etc/banners.conf.py:/code/banners/local.py"
+      - "/etc/banners.conf.py:/code/banners/local_settings.py"
 ```
 
 14. Теперь меняем плейбуку, чтобы она просто запускала роль banners
@@ -810,7 +810,7 @@ DATABASES = {
 
 ```
 [vagrant@st91 ~]$ sudo docker exec -ti banners_web bash
-root@c175860411c1:/code# cat banners/local.py
+root@c175860411c1:/code# cat banners/local_settings.py
 ALLOWED_HOSTS = ['10.2.0.11']
 
 DEBUG = False
@@ -849,7 +849,7 @@ akurt-2:ansible_slave a.kurt$ vagrant halt
 ```
 
 try:
-    from local import *
+    from .local_settings import *
 except ImportError:
     pass
 ```
@@ -863,3 +863,36 @@ c748252fa066: Pushed
 4915c520: digest: sha256:50f0b8224620a003fb0e298690ea58a364cfe84b6636c9e5abbd3a4dfcbf204d size: 3052
 ```
 видим, что образ успешно запушен
+
+4. Деплоим
+
+```
+[vagrant@st91 ansible]$ ansible-playbook playbooks/deploy_banners.yml  --vault-id ansible_secret
+
+PLAY [ansible_slave] *******************************************************************************************************************************************************
+
+TASK [Gathering Facts] *****************************************************************************************************************************************************
+ok: [ansible_slave]
+
+TASK [banners : Update local.py file] **************************************************************************************************************************************
+ok: [ansible_slave]
+
+TASK [banners : Create banners container] **********************************************************************************************************************************
+changed: [ansible_slave]
+
+PLAY RECAP *****************************************************************************************************************************************************************
+ansible_slave              : ok=3    changed=1    unreachable=0    failed=0
+```
+
+5. Пробуем зайти.
+
+http://10.2.0.11:8000
+Получаем 404. И некрасивую)
+
+Зато по http://10.2.0.11:8000/admin можно залогиниться в админку.
+
+Что прозошло:
+1) Та красивая django страница не работает с DEBUG=True
+2) django не хочет отдавать самостоятельно статику с DEBUG=True
+
+Пришла пора добавить в связку nginx
