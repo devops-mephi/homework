@@ -813,8 +813,6 @@ DATABASES = {
 root@c175860411c1:/code# cat banners/local_settings.py
 ALLOWED_HOSTS = ['10.2.0.11']
 
-DEBUG = False
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
@@ -887,12 +885,5 @@ ansible_slave              : ok=3    changed=1    unreachable=0    failed=0
 5. Пробуем зайти.
 
 http://10.2.0.11:8000
-Получаем 404. И некрасивую)
 
-Зато по http://10.2.0.11:8000/admin можно залогиниться в админку.
-
-Что прозошло:
-1) Та красивая django страница не работает с DEBUG=True
-2) django не хочет отдавать самостоятельно статику с DEBUG=True
-
-Пришла пора добавить в связку nginx
+По http://10.2.0.11:8000/admin можно залогиниться в админку.
