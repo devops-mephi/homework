@@ -15,7 +15,7 @@
 ```
 [vagrant@localhost ~]$ sudo su gitlab-runner
 
-[gitlab-runner@localhost vagrant]$ sudo docker login
+[gitlab-runner@localhost vagrant]$ docker login
 Login with your Docker ID to push and pull images from Docker Hub. If you don't have a Docker ID, head over to https://hub.docker.com to create one.
 Username: devopsmephi
 Password: 
@@ -829,3 +829,37 @@ root@c175860411c1:/code# exit
 [vagrant@st91 ~]$
 ```
 
+## Правка приложения для поддержки отдельного конфигурационного файла
+
+1. У меня на компьютере мало ресурсов, поэтому я остановлю машины ansible_* и подниму машину с gitlab ci.
+
+```
+akurt-2:ansible_main a.kurt$ vagrant halt
+==> default: Attempting graceful shutdown of VM...
+```
+
+```
+akurt-2:ansible_slave a.kurt$ vagrant halt
+==> default: Attempting graceful shutdown of VM...
+```
+
+
+2. В конце файла с настройками banners/settings.py допишем следующее
+
+```
+
+try:
+    from local import *
+except ImportError:
+    pass
+```
+
+3. Запустим сборку "deploy", которая запушит новый образ
+
+```
+a327787b3c73: Layer already exists
+5bb0785f2eee: Layer already exists
+c748252fa066: Pushed
+4915c520: digest: sha256:50f0b8224620a003fb0e298690ea58a364cfe84b6636c9e5abbd3a4dfcbf204d size: 3052
+```
+видим, что образ успешно запушен
