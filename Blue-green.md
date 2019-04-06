@@ -171,3 +171,33 @@ blue
 ```
 
 Позапускайте еще, убедитесь, что цвет копии успешно меняется туда-сюда
+
+10. Добавим поднятия контейнера banners, скопировав задачи из main.yml.old + поднятие сети. Но, поменяем только имя и алиас контейнера, добавив _blue или _green в конец:
+
+```
+- name: Create a network
+  docker_network:
+    name: network_docker
+
+- name: Create banners container
+  docker_container:
+    name: "banners_web_{{ update_color }}"
+    image: devopsmephi/banners:latest
+    pull: yes
+    recreate: yes
+    networks:
+      - name: network_docker
+        aliases:
+          - "banners_web_{{ update_color }}"
+    volumes:
+      - "/etc/banners.conf.py:/code/banners/local_settings.py"
+```
+
+Позапускайте роль, убедитесь, что каждый раз переподнимается нужный контейнер:
+
+```
+[vagrant@localhost ~]$ sudo docker ps
+CONTAINER ID        IMAGE                        COMMAND                  CREATED             STATUS              PORTS               NAMES
+4ba8780b81c2        devopsmephi/banners:latest   "/bin/sh -c 'python …"   6 seconds ago       Up 3 seconds                            banners_web_green
+9e30091751f4        devopsmephi/banners:latest   "/bin/sh -c 'python …"   40 seconds ago      Up 35 seconds                           banners_web_blue
+```
