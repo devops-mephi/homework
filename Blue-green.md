@@ -207,3 +207,31 @@ CONTAINER ID        IMAGE                        COMMAND                  CREATE
 4ba8780b81c2        devopsmephi/banners:latest   "/bin/sh -c 'python …"   6 seconds ago       Up 3 seconds                            banners_web_green
 9e30091751f4        devopsmephi/banners:latest   "/bin/sh -c 'python …"   40 seconds ago      Up 35 seconds                           banners_web_blue
 ```
+
+11. Теперь нужно поменять в конфиге nginx адрес, куда перенаправлять запросы. Добавим туда параметр с цветом копии
+
+```
+[vagrant@localhost ansible]$ vi roles/banners/templates/nginx.conf.j2 
+```
+
+```
+server {
+    listen          80;
+    location / {
+        proxy_set_header Host $http_host;
+        proxy_pass  http://banners_web_{{ update_color }}:8000/;
+    }
+}
+```
+
+12. А в саму роль добавим задачу по апдейту этого конфига
+
+```
+- name: Nginx conf (changing banners_web copy)
+  template:
+    src: nginx.conf.j2
+    dest: "/etc/nginx.conf"
+    force: yes
+```
+
+Позапускаем и убедимся, что конфиг правильно меняется
