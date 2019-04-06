@@ -208,7 +208,25 @@ CONTAINER ID        IMAGE                        COMMAND                  CREATE
 9e30091751f4        devopsmephi/banners:latest   "/bin/sh -c 'python …"   40 seconds ago      Up 35 seconds                           banners_web_blue
 ```
 
-11. Теперь нужно поменять в конфиге nginx адрес, куда перенаправлять запросы. Добавим туда параметр с цветом копии
+11. Добавим поднятие nginx, если его вдруг почему-то нет.
+
+обратите внимание, что нет recreate, мы не хотим, чтобы он перезапускался при обновлении.
+```
+- name: Create nginx container
+  docker_container:
+    name: nginx
+    image: nginx:latest
+    networks:
+      - name: network_docker
+        aliases:
+          - "nginx"
+    ports:
+      - "80:80"
+    volumes:
+      - "/etc/nginx.conf:/etc/nginx/conf.d/default.conf"
+```
+
+12. Теперь нужно поменять в конфиге nginx адрес, куда перенаправлять запросы. Добавим туда параметр с цветом копии
 
 ```
 [vagrant@localhost ansible]$ vi roles/banners/templates/nginx.conf.j2 
@@ -224,7 +242,7 @@ server {
 }
 ```
 
-12. А в саму роль добавим задачу по апдейту этого конфига
+13. А в саму роль добавим задачу по апдейту этого конфига
 
 ```
 - name: Nginx conf (changing banners_web copy)
