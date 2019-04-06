@@ -179,6 +179,12 @@ blue
   docker_network:
     name: network_docker
 
+- name: Update local.py
+  template:
+    src: local.py.j2
+    dest: "/etc/banners.conf.py"
+    force: yes
+
 - name: Create banners container
   docker_container:
     name: "banners_web_{{ update_color }}"
