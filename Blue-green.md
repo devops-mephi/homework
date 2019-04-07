@@ -387,3 +387,98 @@ ansible_slave              : ok=14   changed=7    unreachable=0    failed=0
 ```
 
 Успех! Можем убедиться, что обработка запросов не прерывается в момент обновления (для этого постоянно обновляем страницу в момент когда идет апдейт)
+
+Итоговый roles/banners/tasks/main.yml
+```
+---
+- name: Check that the /etc/banners_color exists
+  stat:
+    path: /etc/banners_color
+  register: color_file_stat
+
+- name: If it does not exists then it is blue
+  set_fact:
+    production_color: blue
+  when:
+    color_file_stat.stat.exists == False
+
+- name: Reading /etc/banners_color to check for production color
+  command: "cat /etc/banners_color"
+  register: color_file
+  when:
+    color_file_stat.stat.exists == True
+
+- name: Getting production color from file
+  set_fact:
+    production_color: "{{ color_file.stdout }}"
+  when:
+    color_file_stat.stat.exists == True
+
+- name: Deciding which copy we will update
+  set_fact:
+    update_color: "{% if production_color == 'blue' %}green{% else %}blue{% endif %}"
+
+- debug:
+    msg: "Current production is {{ production_color }}. Will update {{ update_color }}"
+
+- name: Create a network
+  docker_network:
+    name: network_docker
+
+- name: Update local.py
+  template:
+    src: local.py.j2
+    dest: "/etc/banners.conf.py"
+    force: yes
+
+- name: Create banners container
+  docker_container:
+    name: "banners_web_{{ update_color }}"
+    image: devopsmephi/banners:latest
+    pull: yes
+    recreate: yes
+    networks:
+      - name: network_docker
+        aliases:
+          - "banners_web_{{ update_color }}"
+    volumes:
+      - "/etc/banners.conf.py:/code/banners/local_settings.py"
+
+- name: Wait for banners container http response
+  wait_for:
+    host: "banners_web_{{ update_color }}"
+    port: 8000
+
+- name: Create nginx.conf directory
+  file:
+    path: /etc/nginx/conf.d/
+    state: directory
+
+- name: Create nginx container
+  docker_container:
+    name: nginx
+    image: nginx:latest
+    state: started
+    networks:
+      - name: network_docker
+        aliases:
+          - "nginx"
+    ports:
+      - "80:80"
+    volumes:
+      - "/etc/nginx/conf.d/:/etc/nginx/conf.d/"
+
+- name: Nginx conf (changing banners_web copy)
+  template:
+    src: nginx.conf.j2
+    dest: "/etc/nginx/conf.d/default.conf"
+    force: yes
+  notify: 
+    - validate nginx config
+    - reload nginx
+
+- name: Writing new production color to /etc/banners_color
+  copy:
+    dest: /etc/banners_color
+    content: "{{ update_color }}"
+```
