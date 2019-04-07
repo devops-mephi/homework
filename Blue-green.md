@@ -277,9 +277,113 @@ server {
 - name: Nginx conf (changing banners_web copy)
   template:
     src: nginx.conf.j2
+    dest: "/etc/nginx.conf"
+    force: yes
+  notify:
+    - validate nginx config
+    - reload nginx
+```
+
+16. Пытаемся запустить и проверить, что работает
+
+После нескольких попыток понимаем следующее: файл конфигурации nginx обновляется, но в контейнере nginx'а он остается старым.
+Разгадка такого поведения такова: когда ansible меняет конфиг, на самом деле он создает файл заново, после чего у него меняется inode. Это ломает bind-mount, которым проброшен наш файл с конфигом.
+Починить это можно следующим образом: будем прокидывать в nginx не файл, а папку.
+
+Для этого нужно её создать (перед созданием nginx контейнера)
+
+```
+- name: Create nginx.conf directory
+  file:
+    path: /etc/nginx/conf.d/
+    state: directory
+```
+
+Поменяем проброс volumes в контейнере nginx
+```
+- name: Create nginx container
+  docker_container:
+    name: nginx
+    image: nginx:latest
+    state: started
+    networks:
+      - name: network_docker
+        aliases:
+          - "nginx"
+    ports:
+      - "80:80"
+    volumes:
+      - "/etc/nginx/conf.d/:/etc/nginx/conf.d/"
+```
+
+И поменяем имя файла конфигурации, который мы обновляем:
+
+```
+- name: Nginx conf (changing banners_web copy)
+  template:
+    src: nginx.conf.j2
     dest: "/etc/nginx/conf.d/default.conf"
     force: yes
   notify:
     - validate nginx config
     - reload nginx
 ```
+
+17. Проверяем, пробуем обновить
+```
+[vagrant@localhost ansible]$ ansible-playbook playbooks/deploy_banners.yml --vault-id ansible_secret 
+
+PLAY [ansible_slave] **************************************************************************
+
+TASK [Gathering Facts] ************************************************************************
+ok: [ansible_slave]
+
+TASK [banners : Check that the /etc/banners_color exists] *************************************
+ok: [ansible_slave]
+
+TASK [banners : If it does not exists then it is blue] ****************************************
+skipping: [ansible_slave]
+
+TASK [banners : Reading /etc/banners_color to check for production color] *********************
+changed: [ansible_slave]
+
+TASK [banners : Getting production color from file] *******************************************
+ok: [ansible_slave]
+
+TASK [banners : Deciding which copy we will update] *******************************************
+ok: [ansible_slave]
+
+TASK [banners : debug] ************************************************************************
+ok: [ansible_slave] => {
+    "msg": "Current production is green. Will update blue"
+}
+
+TASK [banners : Create a network] *************************************************************
+ok: [ansible_slave]
+
+TASK [banners : Update local.py] **************************************************************
+ok: [ansible_slave]
+
+TASK [banners : Create banners container] *****************************************************
+changed: [ansible_slave]
+
+TASK [banners : Create nginx.conf directory] **************************************************
+changed: [ansible_slave]
+
+TASK [banners : Create nginx container] *******************************************************
+changed: [ansible_slave]
+
+TASK [banners : Nginx conf (changing banners_web copy)] ***************************************
+changed: [ansible_slave]
+
+TASK [banners : Writing new production color to /etc/banners_color] ***************************
+changed: [ansible_slave]
+
+RUNNING HANDLER [banners : reload nginx] ******************************************************
+changed: [ansible_slave]
+
+PLAY RECAP ************************************************************************************
+ansible_slave              : ok=14   changed=7    unreachable=0    failed=0
+```
+
+Успех! Можем убедиться, что обработка запросов не прерывается в момент обновления (для этого постоянно обновляем страницу в момент когда идет апдейт)
