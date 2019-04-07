@@ -253,3 +253,33 @@ server {
 ```
 
 Позапускаем и убедимся, что конфиг правильно меняется
+
+14. Осталось сказать nginx'у, чтобы он перечитал свой конфиг. Делается это путем посылки процессу nginx сигнала HUP. Для этого мы используем handler.
+
+```
+[vagrant@localhost ansible]$ vi roles/banners/handlers/main.yml
+```
+
+но сначала нужно убедиться, что конфигурация получилась валидная. Можно сказать nginx'у "проверь, что конфиги хорошие". Вот так:
+```
+---
+
+- name: validate nginx config
+  command: docker exec nginx nginx -t
+
+- name: reload nginx
+  command: docker kill -s HUP nginx
+```
+
+15. А в задачу по обновлению конфига добавляем секцию notify, которая будет по имени вызывать хендлеры.
+
+```
+- name: Nginx conf (changing banners_web copy)
+  template:
+    src: nginx.conf.j2
+    dest: "/etc/nginx/conf.d/default.conf"
+    force: yes
+  notify:
+    - validate nginx config
+    - reload nginx
+```
