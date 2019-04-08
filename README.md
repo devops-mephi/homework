@@ -21,3 +21,5 @@
 * [Протокол занятия 6 (deploy)](Deploy.md)
 
 * [Задание номер 6 (admin-keys)](Homework6.md)
+
+* [Протокол занятия 7 (blue-green deploy)](Blue-green.md)
